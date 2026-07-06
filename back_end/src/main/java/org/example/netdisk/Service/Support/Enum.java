@@ -24,4 +24,5 @@ public class Enum {
     public static final long defaultTotalSpace = 10737418240L;
     public static final String defaultPWD = "password123";
     public static final String rootDirName = "我的文件";
+    public static final String privateSpaceRootDirName = "私密空间";
 }

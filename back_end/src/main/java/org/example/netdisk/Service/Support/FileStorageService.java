@@ -11,6 +11,9 @@ import java.nio.file.Paths;
 import java.util.Objects;
 import java.util.UUID;
 
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
 @Service
 public class FileStorageService {
 
@@ -38,7 +41,8 @@ public class FileStorageService {
             String filename = saveOneImage(avatar, dir);
             return buildFileUrl(relFolder, filename);
         } catch (IOException e) {
-            throw new RuntimeException("头像保存失败", e);
+            log.error("头像保存失败: dir={}", dir.toAbsolutePath(), e);
+            throw new RuntimeException("头像保存失败: " + e.getMessage(), e);
         }
     }
 
@@ -84,7 +88,7 @@ public class FileStorageService {
         String filename = UUID.randomUUID().toString().replace("-", "");
         filename = (ext == null || ext.isEmpty()) ? filename : filename + "." + ext;
         Path dest = targetDir.resolve(filename);
-        file.transferTo(dest.toFile());
+        Files.copy(file.getInputStream(), dest);
         return filename;
     }
 

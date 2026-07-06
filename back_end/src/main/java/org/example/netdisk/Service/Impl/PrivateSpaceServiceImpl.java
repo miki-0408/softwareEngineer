@@ -3,7 +3,6 @@ package org.example.netdisk.Service.Impl;
 import lombok.extern.slf4j.Slf4j;
 import org.example.netdisk.Entity.*;
 import org.example.netdisk.Mapper.*;
-import org.example.netdisk.ResponseDTO.R_File;
 import org.example.netdisk.ResponseDTO.R_PrivateSpace;
 import org.example.netdisk.ResponseDTO.R_VerifyPrivateSpaceDTO;
 import org.example.netdisk.Service.Inter.PrivateSpaceService;
@@ -23,6 +22,10 @@ public class PrivateSpaceServiceImpl implements PrivateSpaceService {
     private PrivateSpaceMapper privateSpaceMapper;
     @Autowired
     private UserMapper userMapper;
+    @Autowired
+    private DirectoryMapper directoryMapper;
+    @Autowired
+    private FileMapper fileMapper;
     @Autowired
     private TransformService transformService;
 
@@ -44,6 +47,15 @@ public class PrivateSpaceServiceImpl implements PrivateSpaceService {
         } else {
             privateSpaceMapper.updatePrivateSpace(privateSpace);
         }
+        // 创建私密空间根目录
+        Directory rootDir = directoryMapper.selectRootDirectory(userId);
+        if (rootDir != null) {
+            Directory privateRoot = new Directory();
+            privateRoot.setDirName(privateSpaceRootDirName);
+            privateRoot.setParentDirId(null);
+            privateRoot.setUserId(userId);
+            directoryMapper.insertDirectory(privateRoot);
+        }
         return true;
     }
 
@@ -55,6 +67,15 @@ public class PrivateSpaceServiceImpl implements PrivateSpaceService {
         }
         if (!BcryptUtil.matches(password, privateSpace.getPassword())) {
             return false;
+        }
+        // 检查私密空间根目录是否为空（无子目录、无文件）
+        Directory privateRoot = findPrivateSpaceRoot(userId);
+        if (privateRoot != null) {
+            int dirCount = directoryMapper.selectDirectoriesByParentId(userId, privateRoot.getDirId()).size();
+            int fileCount = fileMapper.countPrivateFilesInDirectory(userId, privateRoot.getDirId());
+            if (dirCount > 0 || fileCount > 0) {
+                throw new RuntimeException("私密空间中仍有文件，请先将所有文件移出后再关闭");
+            }
         }
         privateSpace.setIsEncrypted(privateSpaceDisabled);
         privateSpaceMapper.updatePrivateSpace(privateSpace);
@@ -73,7 +94,9 @@ public class PrivateSpaceServiceImpl implements PrivateSpaceService {
             return dto;
         }
         User user = userMapper.selectUserById(userId);
-        String token = JwtUtil.genToken(new Claims(user.getName(), String.valueOf(userId), user.getRole(), privateSpaceVerify).toMap());
+        String token = JwtUtil.genToken(
+            new Claims(user.getName(), String.valueOf(userId), user.getRole(), privateSpaceVerify).toMap()
+        );
         R_VerifyPrivateSpaceDTO dto = new R_VerifyPrivateSpaceDTO();
         dto.setVerified(true);
         dto.setTempToken(token);
@@ -83,7 +106,20 @@ public class PrivateSpaceServiceImpl implements PrivateSpaceService {
     @Override
     public R_PrivateSpace getPrivateSpaceStatus(Long userId) {
         PrivateSpace privateSpace = privateSpaceMapper.selectByUserId(userId);
-        return transformService.transformPrivateSpaceToRPrivateSpace(privateSpace);
+        R_PrivateSpace result = transformService.transformPrivateSpaceToRPrivateSpace(privateSpace);
+        // 自动创建私密空间根目录（兼容历史数据）
+        Directory privateRoot = findPrivateSpaceRoot(userId);
+        if (privateRoot == null && privateSpace != null && privateSpace.getIsEncrypted() == privateSpaceEnabled) {
+            privateRoot = new Directory();
+            privateRoot.setDirName(privateSpaceRootDirName);
+            privateRoot.setParentDirId(null);
+            privateRoot.setUserId(userId);
+            directoryMapper.insertDirectory(privateRoot);
+        }
+        if (privateRoot != null) {
+            result.setRootDirId(String.valueOf(privateRoot.getDirId()));
+        }
+        return result;
     }
 
     public void validatePrivatePassword(Long userId, String privatePassword) {
@@ -94,5 +130,19 @@ public class PrivateSpaceServiceImpl implements PrivateSpaceService {
         if (privatePassword == null || !BcryptUtil.matches(privatePassword, privateSpace.getPassword())) {
             throw new RuntimeException("私密空间密码错误");
         }
+    }
+
+    public String getPrivateSpacePassword(Long userId) {
+        PrivateSpace ps = privateSpaceMapper.selectByUserId(userId);
+        if (ps == null) return null;
+        return ps.getPassword();
+    }
+
+    /** 查找用户的私密空间根目录 */
+    public Directory findPrivateSpaceRoot(Long userId) {
+        java.util.List<Directory> roots = directoryMapper.selectRootDirectories(userId);
+        return roots.stream()
+            .filter(d -> privateSpaceRootDirName.equals(d.getDirName()))
+            .findFirst().orElse(null);
     }
 }

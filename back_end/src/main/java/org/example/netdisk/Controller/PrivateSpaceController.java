@@ -1,18 +1,25 @@
 package org.example.netdisk.Controller;
 
+import org.example.netdisk.ResponseDTO.R_Directory;
+import org.example.netdisk.ResponseDTO.R_File;
 import org.example.netdisk.ResponseDTO.R_PrivateSpace;
 import org.example.netdisk.ResponseDTO.R_VerifyPrivateSpaceDTO;
 import org.example.netdisk.ResponseDTO.Result;
+import org.example.netdisk.Service.Impl.FileServiceImpl;
 import org.example.netdisk.Service.Inter.PrivateSpaceService;
 import org.example.netdisk.Utils.TokenProcess;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 public class PrivateSpaceController {
 
     @Autowired
     private PrivateSpaceService privateSpaceService;
+    @Autowired
+    private FileServiceImpl fileService;
 
     @PostMapping("/user/privateSpace/enable")
     public Result<String> enablePrivateSpace(
@@ -63,5 +70,27 @@ public class PrivateSpaceController {
         Long userId = Long.parseLong((String) TokenProcess.getAttributeFromToken(authHeader, "userId"));
         R_PrivateSpace status = privateSpaceService.getPrivateSpaceStatus(userId);
         return Result.success(status);
+    }
+
+    // ==================== 私密空间文件/目录浏览 ====================
+
+    /** 列出私密空间中某个目录下的所有文件 */
+    @PostMapping("/user/privateSpace/files")
+    public Result<List<R_File>> listPrivateFiles(
+            @RequestHeader("Authorization") String authHeader,
+            @RequestParam("dirId") Long dirId) throws Exception {
+        Long userId = Long.parseLong((String) TokenProcess.getAttributeFromToken(authHeader, "userId"));
+        List<R_File> files = fileService.listPrivateFiles(userId, dirId);
+        return Result.success(files);
+    }
+
+    /** 列出私密空间中某个目录下的子目录 */
+    @PostMapping("/user/privateSpace/directories")
+    public Result<List<R_Directory>> listPrivateDirectories(
+            @RequestHeader("Authorization") String authHeader,
+            @RequestParam(value = "parentDirId", required = false) Long parentDirId) throws Exception {
+        Long userId = Long.parseLong((String) TokenProcess.getAttributeFromToken(authHeader, "userId"));
+        List<R_Directory> dirs = fileService.listPrivateDirectories(userId, parentDirId);
+        return Result.success(dirs);
     }
 }

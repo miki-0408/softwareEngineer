@@ -14,6 +14,7 @@ public class NetdiskFile {
     private LocalDateTime uploadTime;
     private Long userId;
     private Long dirId;
+    private Long originalDirId;
     private Integer status;
     private Integer isEncrypted;
 }

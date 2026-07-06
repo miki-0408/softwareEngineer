@@ -12,6 +12,7 @@ public class R_File {
     private Long fileSize;
     private LocalDateTime uploadTime;
     private String dirId;
+    private String originalDirId;
     private Integer status;
     private Integer isEncrypted;
 }
