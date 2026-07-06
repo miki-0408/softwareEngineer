@@ -11,8 +11,8 @@ import org.example.netdisk.ResponseDTO.R_File;
 import org.example.netdisk.Service.Inter.FileService;
 import org.example.netdisk.Service.Support.FileStorageService;
 import org.example.netdisk.Service.Support.TransformService;
-import org.example.netdisk.Utils.CompressionUtil;
-import org.example.netdisk.Utils.EncryptionUtil;
+import org.example.netdisk.Utils.StandardCompression;
+import org.example.netdisk.Utils.StandardEncryption;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -55,10 +55,10 @@ public class FileServiceImpl implements FileService {
             int isEncryptedFlag = notEncrypted;
             if (encrypt) {
                 privateSpaceService.validatePrivatePassword(userId, privatePassword);
-                rawBytes = EncryptionUtil.encrypt(rawBytes, privatePassword);
+                rawBytes = StandardEncryption.encrypt(rawBytes, privatePassword);
                 isEncryptedFlag = encrypted;
             }
-            byte[] storedBytes = CompressionUtil.compress(rawBytes);
+            byte[] storedBytes = StandardCompression.compress(rawBytes);
             long storedSize = storedBytes.length;
 
             StorageSpace storageSpace = storageSpaceMapper.selectByUserId(userId);
@@ -94,10 +94,10 @@ public class FileServiceImpl implements FileService {
             throw new RuntimeException("文件不存在");
         }
         byte[] storedBytes = fileStorageService.readStoredFile(netdiskFile.getPath());
-        byte[] rawBytes = CompressionUtil.decompress(storedBytes);
+        byte[] rawBytes = StandardCompression.decompress(storedBytes);
         if (netdiskFile.getIsEncrypted() == encrypted) {
             privateSpaceService.validatePrivatePassword(userId, privatePassword);
-            rawBytes = EncryptionUtil.decrypt(rawBytes, privatePassword);
+            rawBytes = StandardEncryption.decrypt(rawBytes, privatePassword);
         }
         return rawBytes;
     }
@@ -161,9 +161,9 @@ public class FileServiceImpl implements FileService {
         }
         privateSpaceService.validatePrivatePassword(userId, privatePassword);
         byte[] storedBytes = fileStorageService.readStoredFile(netdiskFile.getPath());
-        byte[] rawBytes = CompressionUtil.decompress(storedBytes);
-        byte[] encryptedBytes = EncryptionUtil.encrypt(rawBytes, privatePassword);
-        byte[] newStoredBytes = CompressionUtil.compress(encryptedBytes);
+        byte[] rawBytes = StandardCompression.decompress(storedBytes);
+        byte[] encryptedBytes = StandardEncryption.encrypt(rawBytes, privatePassword);
+        byte[] newStoredBytes = StandardCompression.compress(encryptedBytes);
         fileStorageService.deleteStoredFile(netdiskFile.getPath());
         String newPath = fileStorageService.saveCompressedFile(newStoredBytes, userId, netdiskFile.getFileId());
         adjustStorageOnSizeChange(userId, netdiskFile.getFileSize(), newStoredBytes.length);
@@ -184,9 +184,9 @@ public class FileServiceImpl implements FileService {
         }
         privateSpaceService.validatePrivatePassword(userId, privatePassword);
         byte[] storedBytes = fileStorageService.readStoredFile(netdiskFile.getPath());
-        byte[] encryptedBytes = CompressionUtil.decompress(storedBytes);
-        byte[] rawBytes = EncryptionUtil.decrypt(encryptedBytes, privatePassword);
-        byte[] newStoredBytes = CompressionUtil.compress(rawBytes);
+        byte[] encryptedBytes = StandardCompression.decompress(storedBytes);
+        byte[] rawBytes = StandardEncryption.decrypt(encryptedBytes, privatePassword);
+        byte[] newStoredBytes = StandardCompression.compress(rawBytes);
         fileStorageService.deleteStoredFile(netdiskFile.getPath());
         String newPath = fileStorageService.saveCompressedFile(newStoredBytes, userId, netdiskFile.getFileId());
         adjustStorageOnSizeChange(userId, netdiskFile.getFileSize(), newStoredBytes.length);

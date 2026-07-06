@@ -1,79 +1,49 @@
 package org.example.netdisk.Utils;
 
-import javax.crypto.Cipher;
-import javax.crypto.SecretKey;
-import javax.crypto.SecretKeyFactory;
-import javax.crypto.spec.GCMParameterSpec;
-import javax.crypto.spec.PBEKeySpec;
-import javax.crypto.spec.SecretKeySpec;
-import java.nio.ByteBuffer;
-import java.security.SecureRandom;
-import java.security.spec.KeySpec;
-
+/**
+ * 加密 / 解密工具
+ *
+ * ██████  当前实现已清空  ██████
+ * 请在下方 TODO 处填入你选择的加密算法。
+ *
+ * 建议手动实现的算法：
+ * ┌──────────────────────────────────────────────────────────────┐
+ * │ ① Feistel 网络密码 (FeistelCipher.java)                      │
+ * │    - 分组密码，结构优雅，加解密共用同一套代码（子密钥逆序）     │
+ * │    - 可自选轮函数 F，灵活可扩展                                │
+ * │    - 参考完整实现见 FeistelCipher.java                        │
+ * ├──────────────────────────────────────────────────────────────┤
+ * │ ② XOR 流密码                                                │
+ * │    - 最简单的流密码，从密码派生密钥流与数据异或                │
+ * │    - 注意：密钥流不能重复使用，否则可被两次异或破解            │
+ * │    - 适合学习但不适合生产                                      │
+ * └──────────────────────────────────────────────────────────────┘
+ *
+ * 标准参考实现见 StandardEncryption.java（AES-256-GCM + PBKDF2）
+ */
 public class EncryptionUtil {
 
-    private static final String ALGORITHM = "AES/GCM/NoPadding";
-    private static final int GCM_TAG_LENGTH = 128;
-    private static final int GCM_IV_LENGTH = 12;
-    private static final int SALT_LENGTH = 16;
-    private static final int KEY_LENGTH = 256;
-    private static final int ITERATION_COUNT = 65536;
-
+    /**
+     * 加密数据
+     * @param data     原始字节
+     * @param password 密码
+     * @return 加密后的字节（应包含解密所需的所有信息，如盐值、IV 等）
+     */
     public static byte[] encrypt(byte[] data, String password) {
-        if (data == null) {
-            return new byte[0];
-        }
-        try {
-            byte[] salt = generateRandomBytes(SALT_LENGTH);
-            byte[] iv = generateRandomBytes(GCM_IV_LENGTH);
-            SecretKey key = deriveKey(password, salt);
-
-            Cipher cipher = Cipher.getInstance(ALGORITHM);
-            cipher.init(Cipher.ENCRYPT_MODE, key, new GCMParameterSpec(GCM_TAG_LENGTH, iv));
-            byte[] encrypted = cipher.doFinal(data);
-
-            ByteBuffer buffer = ByteBuffer.allocate(SALT_LENGTH + GCM_IV_LENGTH + encrypted.length);
-            buffer.put(salt);
-            buffer.put(iv);
-            buffer.put(encrypted);
-            return buffer.array();
-        } catch (Exception e) {
-            throw new RuntimeException("文件加密失败", e);
-        }
+        // TODO: 在这里实现你的手动加密算法
+        // 可参考 FeistelCipher.encrypt() 的实现
+        throw new UnsupportedOperationException("未实现手动加密算法");
     }
 
+    /**
+     * 解密数据
+     * @param data     加密后的字节
+     * @param password 密码
+     * @return 解密后的原始字节
+     */
     public static byte[] decrypt(byte[] data, String password) {
-        if (data == null || data.length == 0) {
-            return new byte[0];
-        }
-        try {
-            ByteBuffer buffer = ByteBuffer.wrap(data);
-            byte[] salt = new byte[SALT_LENGTH];
-            buffer.get(salt);
-            byte[] iv = new byte[GCM_IV_LENGTH];
-            buffer.get(iv);
-            byte[] encrypted = new byte[buffer.remaining()];
-            buffer.get(encrypted);
-
-            SecretKey key = deriveKey(password, salt);
-            Cipher cipher = Cipher.getInstance(ALGORITHM);
-            cipher.init(Cipher.DECRYPT_MODE, key, new GCMParameterSpec(GCM_TAG_LENGTH, iv));
-            return cipher.doFinal(encrypted);
-        } catch (Exception e) {
-            throw new RuntimeException("文件解密失败，密码错误或文件已损坏", e);
-        }
-    }
-
-    private static SecretKey deriveKey(String password, byte[] salt) throws Exception {
-        SecretKeyFactory factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
-        KeySpec spec = new PBEKeySpec(password.toCharArray(), salt, ITERATION_COUNT, KEY_LENGTH);
-        byte[] keyBytes = factory.generateSecret(spec).getEncoded();
-        return new SecretKeySpec(keyBytes, "AES");
-    }
-
-    private static byte[] generateRandomBytes(int length) {
-        byte[] bytes = new byte[length];
-        new SecureRandom().nextBytes(bytes);
-        return bytes;
+        // TODO: 在这里实现你的手动解密算法
+        // 可参考 FeistelCipher.decrypt() 的实现
+        throw new UnsupportedOperationException("未实现手动解密算法");
     }
 }
