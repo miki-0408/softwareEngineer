@@ -1,13 +1,14 @@
 package org.example.netdisk.Service.Inter;
 
-import org.example.PCOI.Entity.Log;
-import org.springframework.web.multipart.MultipartFile;
+import org.example.netdisk.Entity.Log;
 
 import java.util.List;
 
 public interface SystemAdminService {
-    boolean updateUserInfo(String userId, String newUsername, Integer newGender, MultipartFile newAvatar);
-    boolean resetPassword(String userId);
+
+    boolean updateUserInfo(Long userId, String newName, String newSex, org.springframework.web.multipart.MultipartFile newAvatar);
+
+    boolean resetPassword(Long userId);
+
     List<Log> getLogs();
 }
-

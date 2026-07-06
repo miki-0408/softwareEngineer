@@ -1,14 +1,13 @@
 package org.example.netdisk.Utils;
 
-import org.example.PCOI.Entity.Claims;
+import org.example.netdisk.Entity.Claims;
 
 import java.util.Map;
-
 
 public class TokenProcess {
     public static Object getAttributeFromToken(String authHeader, String key) throws Exception {
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            throw new Exception("Invalid Authorization header" );
+            throw new Exception("Invalid Authorization header");
         }
         String token = authHeader.substring(7);
         Map<String, Object> map = JwtUtil.parseToken(token);

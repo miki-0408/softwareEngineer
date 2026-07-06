@@ -25,13 +25,15 @@ CREATE TABLE IF NOT EXISTS `file` (
                                       `fileId` BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '文件ID',
                                       `fileName` VARCHAR(255) NOT NULL COMMENT '文件名',
     `fileType` VARCHAR(50) DEFAULT NULL COMMENT '文件类型 (如 jpg, pdf)',
-    `fileSize` BIGINT DEFAULT 0 COMMENT '文件大小 (字节)',
+    `fileSize` BIGINT DEFAULT 0 COMMENT '文件大小 (字节，存储压缩后大小)',
     `path` VARCHAR(500) NOT NULL COMMENT '文件存储路径',
     `uploadTime` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '上传时间',
     `userId` BIGINT NOT NULL COMMENT '所属用户ID',
-    `status` TINYINT DEFAULT 0 COMMENT '文件状态 (0=正常,1=已删除)',
+    `dirId` BIGINT DEFAULT NULL COMMENT '所属目录ID',
+    `status` TINYINT DEFAULT 0 COMMENT '文件状态 (0=正常,1=回收站)',
     `isEncrypted` TINYINT DEFAULT 0 COMMENT '是否加密 (0=否, 1=是)',
-    FOREIGN KEY (`userId`) REFERENCES `user`(`userId`) ON DELETE CASCADE
+    FOREIGN KEY (`userId`) REFERENCES `user`(`userId`) ON DELETE CASCADE,
+    FOREIGN KEY (`dirId`) REFERENCES `directory`(`dirId`) ON DELETE SET NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='文件表';
 
 -- 5. 存储空间表 (Storage space) - 与用户 1对1

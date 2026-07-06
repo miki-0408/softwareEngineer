@@ -7,19 +7,18 @@ import org.springframework.web.servlet.HandlerInterceptor;
 
 import java.util.Map;
 
-import static org.example.PCOI.Service.Support.Enum.systemAdmin;
+import static org.example.netdisk.Service.Support.Enum.systemAdmin;
 
 public class JwtSysAdminInterceptor implements HandlerInterceptor {
     @Override
-    public boolean preHandle(@NonNull HttpServletRequest request, @NonNull HttpServletResponse response, @NonNull Object handler){
+    public boolean preHandle(@NonNull HttpServletRequest request, @NonNull HttpServletResponse response, @NonNull Object handler) {
         String token = request.getHeader("Authorization");
         if (token != null && token.startsWith("Bearer ")) {
             token = token.substring(7);
-            System.out.println("Received systoken: " + token);
             try {
                 Map<String, Object> claims = JwtUtil.parseToken(token);
-                Integer role = (Integer) claims.get("role");
-                if (role.equals(systemAdmin)) {
+                String role = (String) claims.get("role");
+                if (systemAdmin.equals(role)) {
                     request.setAttribute("claims", claims);
                     return true;
                 } else {

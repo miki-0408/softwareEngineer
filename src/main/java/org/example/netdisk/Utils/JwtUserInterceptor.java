@@ -7,18 +7,18 @@ import org.springframework.web.servlet.HandlerInterceptor;
 
 import java.util.Map;
 
-import static org.example.PCOI.Service.Support.Enum.normalUser;
+import static org.example.netdisk.Service.Support.Enum.normalUser;
 
 public class JwtUserInterceptor implements HandlerInterceptor {
     @Override
-    public boolean preHandle(@NonNull HttpServletRequest request, @NonNull HttpServletResponse response, @NonNull Object handler){
+    public boolean preHandle(@NonNull HttpServletRequest request, @NonNull HttpServletResponse response, @NonNull Object handler) {
         String token = request.getHeader("Authorization");
         if (token != null && token.startsWith("Bearer ")) {
             token = token.substring(7);
             try {
                 Map<String, Object> claims = JwtUtil.parseToken(token);
-                Integer role = (Integer) claims.get("role");
-                if (role.equals(normalUser)) {
+                String role = (String) claims.get("role");
+                if (normalUser.equals(role)) {
                     request.setAttribute("claims", claims);
                     return true;
                 } else {

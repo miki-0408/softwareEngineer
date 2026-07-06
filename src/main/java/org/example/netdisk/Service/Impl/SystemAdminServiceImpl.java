@@ -1,23 +1,25 @@
 package org.example.netdisk.Service.Impl;
 
 import lombok.extern.slf4j.Slf4j;
-import org.example.PCOI.Entity.Log;
-import org.example.PCOI.Entity.User;
-import org.example.PCOI.Mapper.LogMapper;
-import org.example.PCOI.Mapper.UserMapper;
-import org.example.PCOI.Service.Inter.SystemAdminService;
-import org.example.PCOI.Service.Support.FileStorageService;
-import org.example.PCOI.Utils.BcryptUtil;
+import org.example.netdisk.Entity.Log;
+import org.example.netdisk.Entity.User;
+import org.example.netdisk.Mapper.LogMapper;
+import org.example.netdisk.Mapper.UserMapper;
+import org.example.netdisk.Service.Inter.SystemAdminService;
+import org.example.netdisk.Service.Support.FileStorageService;
+import org.example.netdisk.Utils.BcryptUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
-import static org.example.PCOI.Service.Support.Enum.*;
+import static org.example.netdisk.Service.Support.Enum.defaultPWD;
+
 @Slf4j
 @Service
 public class SystemAdminServiceImpl implements SystemAdminService {
+
     @Autowired
     private UserMapper usermapper;
     @Autowired
@@ -26,44 +28,38 @@ public class SystemAdminServiceImpl implements SystemAdminService {
     private FileStorageService fileStorageService;
 
     @Override
-    public boolean updateUserInfo(String userId, String newUsername, Integer newGender, MultipartFile newAvatar) {
+    public boolean updateUserInfo(Long userId, String newName, String newSex, MultipartFile newAvatar) {
         try {
-            // 1) 按 userId 查询目标用户
             User user = usermapper.selectUserById(userId);
             if (user == null) {
-                return false; // 用户不存在
+                return false;
             }
-            // 2) 若提供了新用户名，校验是否被其他用户占用
-            if (newUsername != null && !newUsername.isEmpty()) {
-                User existingUser = usermapper.selectUserByName(newUsername);
+            if (newName != null && !newName.isEmpty()) {
+                User existingUser = usermapper.selectUserByName(newName);
                 if (existingUser != null && !existingUser.getUserId().equals(userId)) {
-                    return false; // 新用户名已被其他用户使用
+                    return false;
                 }
-                user.setUsername(newUsername); // 覆盖用户名
+                user.setName(newName);
             }
-            // 3) 若提供了新性别，直接覆盖
-            if (newGender != null) {
-                user.setSex(newGender);
+            if (newSex != null && !newSex.isEmpty()) {
+                user.setSex(newSex);
             }
-            // 4) 若上传了新头像，保存文件并更新头像URL
             if (newAvatar != null && !newAvatar.isEmpty()) {
                 String avatarUrl = fileStorageService.saveAvatar(newAvatar, userId);
                 user.setAvatar(avatarUrl);
             }
-            // 5) 持久化更新
             usermapper.updateUser(user);
             return true;
-        }catch(RuntimeException e){
-            throw new RuntimeException("更新用户信息失败:"+e.getMessage());
+        } catch (RuntimeException e) {
+            throw new RuntimeException("更新用户信息失败:" + e.getMessage());
         }
     }
 
     @Override
-    public boolean resetPassword(String userId) {
+    public boolean resetPassword(Long userId) {
         User user = usermapper.selectUserById(userId);
         if (user != null) {
-            String defaultPassword = BcryptUtil.hash(defaultPWD);
-            user.setPassword(defaultPassword);
+            user.setPassword(BcryptUtil.hash(defaultPWD));
             usermapper.updateUser(user);
             return true;
         }

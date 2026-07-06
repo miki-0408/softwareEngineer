@@ -1,91 +1,61 @@
 package org.example.netdisk.Service.Support;
 
-import org.example.PCOI.Entity.*;
-import org.example.PCOI.ResponseDTO.*;
+import org.example.netdisk.Entity.*;
+import org.example.netdisk.ResponseDTO.*;
 import org.springframework.stereotype.Service;
 
-import java.util.List;
+import static org.example.netdisk.Service.Support.Enum.privateSpaceEnabled;
 
 @Service
 public class TransformService {
-    public R_User transformUserToRUser(User user)
-    {
+
+    public R_User transformUserToRUser(User user) {
         R_User rUser = new R_User();
-        rUser.setUserId(user.getUserId());
+        rUser.setUserId(String.valueOf(user.getUserId()));
         rUser.setRole(user.getRole());
-        rUser.setStatus(user.getStatus());
-        rUser.setUsername(user.getUsername());
+        rUser.setName(user.getName());
         rUser.setSex(user.getSex());
         rUser.setAvatar(user.getAvatar());
         return rUser;
     }
 
-    public SecurityIssue transformRSecurityIssueToSecurityIssue(R_SecurityIssue rSecurityIssue,String userId)
-    {
-        SecurityIssue securityIssue = new SecurityIssue();
-        securityIssue.setUserId(userId);
-        securityIssue.setDescription(rSecurityIssue.getDescription());
-        securityIssue.setAnswer(rSecurityIssue.getAnswer());
-        return securityIssue;
+    public R_StorageSpace transformStorageSpaceToRStorageSpace(StorageSpace storageSpace) {
+        R_StorageSpace rStorageSpace = new R_StorageSpace();
+        rStorageSpace.setTotalSpace(storageSpace.getTotalSpace());
+        rStorageSpace.setUsedSpace(storageSpace.getUsedSpace());
+        rStorageSpace.setRemainSpace(storageSpace.getRemainSpace());
+        return rStorageSpace;
     }
 
-    public R_OverviewContribution transformContributionToROverviewContribution(Contribution contribution,String avatar,String authorName)
-    {
-        R_OverviewContribution rOverviewContribution = new R_OverviewContribution();
-        rOverviewContribution.setContributionId(contribution.getContributionId());
-        rOverviewContribution.setTitle(contribution.getTitle());
-        rOverviewContribution.setAuthorId(contribution.getAuthorId());
-        rOverviewContribution.setImage(contribution.getImage());
-        rOverviewContribution.setViewCount(contribution.getViewCount());
-        rOverviewContribution.setFavoriteCount(contribution.getFavoriteCount());
-        rOverviewContribution.setLikeCount(contribution.getLikeCount());
-        rOverviewContribution.setCommentCount(contribution.getCommentCount());
-        rOverviewContribution.setDismissalReason(contribution.getDismissalReason());
-        rOverviewContribution.setAvatar(avatar);
-        rOverviewContribution.setAuthorName(authorName);
-        return rOverviewContribution;
+    public R_PrivateSpace transformPrivateSpaceToRPrivateSpace(PrivateSpace privateSpace) {
+        R_PrivateSpace rPrivateSpace = new R_PrivateSpace();
+        if (privateSpace == null) {
+            rPrivateSpace.setEnabled(false);
+            return rPrivateSpace;
+        }
+        rPrivateSpace.setEnabled(privateSpace.getIsEncrypted() != null && privateSpace.getIsEncrypted() == privateSpaceEnabled);
+        return rPrivateSpace;
     }
 
-    public R_ContributionComment transformCommentToRContributionComment(Comment comment,String avatar,String authorName)
-    {
-        R_ContributionComment rContributionComment = new R_ContributionComment();
-        rContributionComment.setCommentId(comment.getCommentId());
-        rContributionComment.setAuthor(comment.getAuthor());
-        rContributionComment.setDescription(comment.getDescription());
-        rContributionComment.setAvatar(avatar);
-        rContributionComment.setTime(comment.getTime());
-        rContributionComment.setAuthorName(authorName);
-        return rContributionComment;
+    public R_File transformFileToRFile(NetdiskFile file) {
+        R_File rFile = new R_File();
+        rFile.setFileId(String.valueOf(file.getFileId()));
+        rFile.setFileName(file.getFileName());
+        rFile.setFileType(file.getFileType());
+        rFile.setFileSize(file.getFileSize());
+        rFile.setUploadTime(file.getUploadTime());
+        rFile.setDirId(file.getDirId() == null ? null : String.valueOf(file.getDirId()));
+        rFile.setStatus(file.getStatus());
+        rFile.setIsEncrypted(file.getIsEncrypted());
+        return rFile;
     }
 
-    public R_UserComment transformCommentToRUserComment(Comment comment, R_OverviewContribution contribution,String avatar,String authorName)
-    {
-        R_UserComment rUserComment = new R_UserComment();
-        rUserComment.setComment(transformCommentToRContributionComment(comment,avatar,authorName));
-        rUserComment.setContribution(contribution);
-        return rUserComment;
-    }
-
-    public R_Contribution transformContributionToRContribution(Contribution contribution, String avatar, String authorName, List<Tag> tags)
-    {
-        R_Contribution rContribution = new R_Contribution();
-        rContribution.setType(contribution.getType());
-        rContribution.setContributionId(contribution.getContributionId());
-        rContribution.setTitle(contribution.getTitle());
-        rContribution.setAuthorId(contribution.getAuthorId());
-        rContribution.setDescription(contribution.getDescription());
-        rContribution.setImage(contribution.getImage());
-        rContribution.setViewCount(contribution.getViewCount());
-        rContribution.setFavoriteCount(contribution.getFavoriteCount());
-        rContribution.setLikeCount(contribution.getLikeCount());
-        rContribution.setCommentCount(contribution.getCommentCount());
-        rContribution.setStatus(contribution.getStatus());
-        rContribution.setDismissalReason(contribution.getDismissalReason());
-        rContribution.setPublishTime(contribution.getPublishTime());
-        rContribution.setAuditStatus(contribution.getAuditStatus());
-        rContribution.setUploaderAvatarPath(avatar);
-        rContribution.setAuthorName(authorName);
-        rContribution.setTags(tags);
-        return rContribution;
+    public R_Directory transformDirectoryToRDirectory(Directory directory) {
+        R_Directory rDirectory = new R_Directory();
+        rDirectory.setDirId(String.valueOf(directory.getDirId()));
+        rDirectory.setDirName(directory.getDirName());
+        rDirectory.setParentDirId(directory.getParentDirId() == null ? null : String.valueOf(directory.getParentDirId()));
+        rDirectory.setCreateTime(directory.getCreateTime());
+        return rDirectory;
     }
 }

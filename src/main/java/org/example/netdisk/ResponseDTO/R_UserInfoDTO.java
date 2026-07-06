@@ -4,6 +4,7 @@ import lombok.Data;
 
 @Data
 public class R_UserInfoDTO {
-    private R_User user;               // 用户信息
-    private Boolean isConcerned;        // 是否已关注
+    private R_User user;
+    private R_StorageSpace storage;
+    private R_PrivateSpace privateSpace;
 }
