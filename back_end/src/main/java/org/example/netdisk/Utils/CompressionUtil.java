@@ -29,9 +29,10 @@ public class CompressionUtil {
      * @return 压缩后的字节
      */
     public static byte[] compress(byte[] data) {
-        // TODO: 在这里实现你的手动压缩算法
-        // 可参考 LZ77Compression.compress() 的实现
-        throw new UnsupportedOperationException("未实现手动压缩算法");
+        if (data == null || data.length == 0) {
+            return new byte[0];
+        }
+        return LZ77Compression.compress(data);
     }
 
     /**
@@ -40,8 +41,9 @@ public class CompressionUtil {
      * @return 解压后的原始字节
      */
     public static byte[] decompress(byte[] data) {
-        // TODO: 在这里实现你的手动解压缩算法
-        // 可参考 LZ77Compression.decompress() 的实现
-        throw new UnsupportedOperationException("未实现手动解压缩算法");
+        if (data == null || data.length == 0) {
+            return new byte[0];
+        }
+        return LZ77Compression.decompress(data);
     }
 }
