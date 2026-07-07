@@ -261,11 +261,12 @@ public class FileServiceImpl implements FileService {
         netdiskFile.setPath(newPath);
         netdiskFile.setFileSize((long) newStoredBytes.length);
 
-        // 恢复目标目录：优先用原始目录；如果是私密空间内部目录或为空，则恢复到"我的文件"
+        // 恢复目标目录：优先用原始目录；如果已删除/为空/属于私密空间内部 → 恢复到"我的文件"
         Long originalDir = netdiskFile.getOriginalDirId();
         Directory privateRoot = privateSpaceService.findPrivateSpaceRoot(userId);
-        if (originalDir == null || (privateRoot != null && originalDir.equals(privateRoot.getDirId()))) {
-            // 从私密空间直接上传的文件 → 恢复到用户根目录
+        Directory targetDir = (originalDir != null) ? directoryMapper.selectDirectoryById(originalDir, userId) : null;
+        if (targetDir == null || (privateRoot != null && originalDir.equals(privateRoot.getDirId()))) {
+            // 原始目录已被删除 / 从私密空间直接上传的文件 → 恢复到用户根目录
             Directory userRoot = directoryMapper.selectRootDirectory(userId);
             originalDir = userRoot != null ? userRoot.getDirId() : null;
         }

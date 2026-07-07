@@ -23,14 +23,12 @@
           <span>回收站</span>
         </el-menu-item>
 
-        <el-menu-item index="private" :route="{ path: '/private' }">
+        <el-menu-item index="private" :route="{ path: '/private' }"
+          :class="{ 'ps-active': userStore.privateSpaceEnabled }">
           <el-icon><Lock /></el-icon>
           <span>私密空间</span>
-          <el-badge
-            v-if="userStore.privateSpaceEnabled"
-            is-dot
-            style="margin-left:auto;margin-right:16px"
-          />
+          <el-icon v-if="userStore.privateSpaceEnabled" size="12" color="#67c23a"
+            style="margin-left:auto;margin-right:8px"><CircleCheckFilled /></el-icon>
         </el-menu-item>
 
         <el-menu-item
@@ -67,7 +65,7 @@
 <script setup>
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { Cloudy, FolderOpened, Delete, Lock, Setting, SwitchButton } from '@element-plus/icons-vue'
+import { Cloudy, FolderOpened, Delete, Lock, Setting, SwitchButton, CircleCheckFilled } from '@element-plus/icons-vue'
 import { useUserStore } from '../stores/user'
 
 const props = defineProps({

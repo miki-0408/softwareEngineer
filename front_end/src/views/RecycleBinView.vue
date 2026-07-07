@@ -11,24 +11,38 @@
       </div>
 
       <div class="app-content">
-        <div style="margin-bottom:16px">
-          <el-button @click="refreshList">
-            <el-icon><Refresh /></el-icon> 刷新
-          </el-button>
-          <el-button type="danger" plain :disabled="selectedIds.length === 0"
-            @click="batchDeletePermanent">
-            彻底删除选中项
-          </el-button>
+        <!-- 筛选 + 批量操作 -->
+        <div class="flex-between mb-16" style="flex-wrap:wrap;gap:8px">
+          <div class="flex-center gap-8">
+            <el-input v-model="filterText" placeholder="搜索文件..." clearable
+              style="width:200px" :prefix-icon="Search" size="default" />
+            <el-select v-model="filterType" placeholder="类型" clearable style="width:120px" size="default">
+              <el-option label="全部" value="" />
+              <el-option v-for="t in fileTypeOptions" :key="t" :label="t" :value="t" />
+            </el-select>
+            <el-button @click="refreshList">
+              <el-icon><Refresh /></el-icon> 刷新
+            </el-button>
+          </div>
+          <div v-if="selectedIds.length > 0" class="flex-center gap-8">
+            <span class="text-muted">已选 {{ selectedIds.length }} 项</span>
+            <el-button type="primary" @click="batchRestore">
+              <el-icon><RefreshLeft /></el-icon> 批量还原
+            </el-button>
+            <el-button type="danger" @click="batchDeletePermanent">
+              <el-icon><DeleteFilled /></el-icon> 彻底删除
+            </el-button>
+          </div>
         </div>
 
         <el-table
-          :data="recycleFiles"
+          :data="filteredFiles"
           v-loading="loading"
           empty-text="回收站为空"
           @selection-change="handleSelectionChange"
         >
-          <el-table-column type="selection" width="50" />
-          <el-table-column label="文件名" min-width="260">
+          <el-table-column type="selection" width="40" />
+          <el-table-column label="文件名" min-width="260" prop="fileName" sortable>
             <template #default="{ row }">
               <div class="flex-center gap-8">
                 <el-icon :size="20"><Document /></el-icon>
@@ -39,17 +53,17 @@
               </div>
             </template>
           </el-table-column>
-          <el-table-column label="类型" width="100">
+          <el-table-column label="类型" width="100" prop="fileType" sortable>
             <template #default="{ row }">
               <el-tag size="small" type="info">{{ row.fileType || '未知' }}</el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="大小" width="120" sortable prop="fileSize">
+          <el-table-column label="大小" width="120" prop="fileSize" sortable>
             <template #default="{ row }">
               {{ userStore.formatSize(row.fileSize) }}
             </template>
           </el-table-column>
-          <el-table-column label="删除时间" width="180">
+          <el-table-column label="删除时间" width="180" prop="uploadTime" sortable>
             <template #default="{ row }">
               {{ formatTime(row.uploadTime) }}
             </template>
@@ -71,9 +85,9 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Refresh, DeleteFilled, RefreshLeft, Document } from '@element-plus/icons-vue'
+import { Refresh, DeleteFilled, RefreshLeft, Document, Search } from '@element-plus/icons-vue'
 import { recycleAPI } from '../api'
 import { useUserStore } from '../stores/user'
 import Sidebar from '../components/Sidebar.vue'
@@ -83,6 +97,30 @@ const userStore = useUserStore()
 const recycleFiles = ref([])
 const selectedIds = ref([])
 const loading = ref(false)
+
+// ==================== 筛选 ====================
+const filterText = ref('')
+const filterType = ref('')
+
+const fileTypeOptions = computed(() => {
+  const types = new Set()
+  recycleFiles.value.forEach(f => { if (f.fileType) types.add(f.fileType) })
+  return [...types].sort()
+})
+
+const filteredFiles = computed(() => {
+  let items = recycleFiles.value
+  if (filterText.value) {
+    const q = filterText.value.toLowerCase()
+    items = items.filter(f => f.fileName.toLowerCase().includes(q))
+  }
+  if (filterType.value) {
+    items = items.filter(f => f.fileType === filterType.value)
+  }
+  return items
+})
+
+// ==================== 数据加载 ====================
 
 async function refreshList() {
   loading.value = true
@@ -96,6 +134,8 @@ async function refreshList() {
 function handleSelectionChange(selection) {
   selectedIds.value = selection.map(f => f.fileId)
 }
+
+// ==================== 单项操作 ====================
 
 async function restoreFile(file) {
   try {
@@ -120,7 +160,29 @@ async function permanentDeleteFile(file) {
   } catch { /* ignore */ }
 }
 
+// ==================== 批量操作 ====================
+
+async function batchRestore() {
+  if (selectedIds.value.length === 0) return
+  try {
+    await ElMessageBox.confirm(
+      `确定要还原选中的 ${selectedIds.value.length} 个文件吗？`,
+      '批量还原', { confirmButtonText: '确定', cancelButtonText: '取消', type: 'info' }
+    )
+  } catch { return }
+  let ok = 0
+  for (const id of selectedIds.value) {
+    try {
+      await recycleAPI.restore(id)
+      ok++
+    } catch { /* skip */ }
+  }
+  ElMessage.success(`成功还原 ${ok} 个文件`)
+  await refreshList()
+}
+
 async function batchDeletePermanent() {
+  if (selectedIds.value.length === 0) return
   try {
     await ElMessageBox.confirm(
       `将彻底删除选中的 ${selectedIds.value.length} 个文件，无法恢复！确定继续？`,
@@ -128,10 +190,14 @@ async function batchDeletePermanent() {
       { confirmButtonText: '确定', cancelButtonText: '取消', type: 'error' }
     )
   } catch { return }
+  let ok = 0
   for (const id of selectedIds.value) {
-    try { await recycleAPI.deletePermanent(id) } catch { /* continue */ }
+    try {
+      await recycleAPI.deletePermanent(id)
+      ok++
+    } catch { /* continue */ }
   }
-  ElMessage.success('批量删除完成')
+  ElMessage.success(`已彻底删除 ${ok} 个文件`)
   await refreshList()
 }
 

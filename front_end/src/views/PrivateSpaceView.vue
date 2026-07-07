@@ -69,89 +69,112 @@
             </el-button>
           </div>
 
-          <!-- 目录列表 -->
-          <div v-if="directories.length > 0" style="margin-bottom:16px">
-            <el-text type="info" size="small">文件夹</el-text>
-            <div class="directory-tree">
-              <div
-                v-for="dir in directories"
-                :key="dir.dirId"
-                class="dir-item"
-                @click="navigateToDir(dir.dirId, dir.dirName)"
-              >
-                <el-icon color="#e6a23c"><Folder /></el-icon>
-                <span>{{ dir.dirName }}</span>
-                <div style="margin-left:auto;display:flex;gap:4px" @click.stop>
-                  <el-button size="small" text @click="openRenameDir(dir)">
-                    <el-icon><Edit /></el-icon>
-                  </el-button>
-                  <el-button size="small" text type="danger" @click="deleteDirectory(dir)">
-                    <el-icon><Delete /></el-icon>
-                  </el-button>
-                </div>
-              </div>
+          <!-- 筛选 + 批量操作 -->
+          <div class="flex-between mb-16" style="flex-wrap:wrap;gap:8px">
+            <div class="flex-center gap-8">
+              <el-input v-model="filterText" placeholder="搜索..." clearable
+                style="width:200px" :prefix-icon="Search" size="default" />
+              <el-select v-model="filterType" placeholder="类型" clearable style="width:120px" size="default">
+                <el-option label="全部" value="" />
+                <el-option label="文件夹" value="文件夹" />
+                <el-option v-for="t in fileTypeOptions" :key="t" :label="t" :value="t" />
+              </el-select>
+            </div>
+            <div v-if="selectedItems.length > 0" class="flex-center gap-8">
+              <span class="text-muted">已选 {{ selectedItems.length }} 项</span>
+              <el-button size="default" @click="batchMove">
+                <el-icon><Rank /></el-icon> 批量移动
+              </el-button>
+              <el-button size="default" type="warning" @click="batchDecrypt">
+                <el-icon><Unlock /></el-icon> 批量移出
+              </el-button>
+              <el-button size="default" type="danger" @click="batchDelete">
+                <el-icon><Delete /></el-icon> 批量删除
+              </el-button>
             </div>
           </div>
 
-          <!-- 文件列表 -->
+          <!-- 统一文件/文件夹列表 -->
           <el-table
-            :data="files"
+            :data="filteredItems"
             style="width:100%"
             v-loading="loading"
             empty-text="此目录为空"
+            :default-sort="{ prop: 'order', order: 'ascending' }"
+            @row-click="onRowClick"
+            @selection-change="onSelectionChange"
+            ref="tableRef"
           >
-            <el-table-column label="文件名" min-width="260">
+            <el-table-column type="selection" width="40" />
+            <el-table-column label="名称" min-width="250" prop="name" sortable>
               <template #default="{ row }">
                 <div class="flex-center gap-8">
-                  <el-icon :size="20"><Document /></el-icon>
-                  <span>{{ row.fileName }}</span>
-                  <el-tag size="small" type="danger" effect="dark">
+                  <el-icon :size="20" :color="row.isDir ? '#e6a23c' : '#909399'">
+                    <Folder v-if="row.isDir" />
+                    <Document v-else />
+                  </el-icon>
+                  <span class="item-name" @click.stop="row.isDir && navigateToDir(row.id, row.name)">
+                    {{ row.name }}
+                  </span>
+                  <el-tag v-if="!row.isDir" size="small" type="danger" effect="dark">
                     <el-icon :size="12"><Lock /></el-icon>
                   </el-tag>
                 </div>
               </template>
             </el-table-column>
-            <el-table-column label="类型" width="100">
+            <el-table-column label="类型" width="100" prop="type" sortable>
               <template #default="{ row }">
-                <el-tag size="small" type="info">{{ row.fileType || '未知' }}</el-tag>
+                <el-tag size="small" :type="row.isDir ? 'warning' : 'info'">
+                  {{ row.type }}
+                </el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="大小" width="120" sortable prop="fileSize">
+            <el-table-column label="大小" width="120" prop="size" sortable>
               <template #default="{ row }">
-                {{ userStore.formatSize(row.fileSize) }}
+                {{ row.isDir ? '-' : userStore.formatSize(row.size) }}
               </template>
             </el-table-column>
-            <el-table-column label="上传时间" width="180" sortable prop="uploadTime">
+            <el-table-column label="修改时间" width="180" prop="time" sortable>
               <template #default="{ row }">
-                {{ formatTime(row.uploadTime) }}
+                {{ formatTime(row.time) }}
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="240" fixed="right">
+            <el-table-column label="操作" width="250" fixed="right">
               <template #default="{ row }">
-                <el-button size="small" type="primary" link @click="downloadFile(row)">
-                  <el-icon><Download /></el-icon> 下载
-                </el-button>
-                <el-button size="small" link @click="openRenameFile(row)">
-                  <el-icon><Edit /></el-icon> 重命名
-                </el-button>
-                <el-dropdown trigger="click" @command="(cmd) => handleFileAction(cmd, row)">
-                  <el-button size="small" link>
-                    <el-icon><MoreFilled /></el-icon>
+                <template v-if="row.isDir">
+                  <el-button size="small" link @click.stop="openRenameDir(row.original)">
+                    <el-icon><Edit /></el-icon> 重命名
                   </el-button>
-                  <template #dropdown>
-                    <el-dropdown-menu>
-                      <el-dropdown-item command="move">
-                        <el-icon><Rank /></el-icon> 移动到...
-                      </el-dropdown-item>
-                      <el-dropdown-item command="delete">
-                        <el-icon><Delete /></el-icon> 删除
-                      </el-dropdown-item>
-                      <el-dropdown-item command="decrypt" divided>
-                        <el-icon><Unlock /></el-icon> 移出私密空间
-                      </el-dropdown-item>
-                    </el-dropdown-menu>
-                  </template>
-                </el-dropdown>
+                  <el-button size="small" link type="danger" @click.stop="deleteDirectory(row.original)">
+                    <el-icon><Delete /></el-icon> 删除
+                  </el-button>
+                </template>
+                <template v-else>
+                  <el-button size="small" type="primary" link @click.stop="downloadFile(row.original)">
+                    <el-icon><Download /></el-icon> 下载
+                  </el-button>
+                  <el-button size="small" link @click.stop="openRenameFile(row.original)">
+                    <el-icon><Edit /></el-icon> 重命名
+                  </el-button>
+                  <el-dropdown trigger="click" @command="(cmd) => handleFileAction(cmd, row.original)">
+                    <el-button size="small" link @click.stop>
+                      <el-icon><MoreFilled /></el-icon>
+                    </el-button>
+                    <template #dropdown>
+                      <el-dropdown-menu>
+                        <el-dropdown-item command="move">
+                          <el-icon><Rank /></el-icon> 移动到...
+                        </el-dropdown-item>
+                        <el-dropdown-item command="delete">
+                          <el-icon><Delete /></el-icon> 删除
+                        </el-dropdown-item>
+                        <el-dropdown-item command="decrypt" divided>
+                          <el-icon><Unlock /></el-icon> 移出私密空间
+                        </el-dropdown-item>
+                      </el-dropdown-menu>
+                    </template>
+                  </el-dropdown>
+                </template>
               </template>
             </el-table-column>
           </el-table>
@@ -203,7 +226,7 @@
     </el-dialog>
 
     <!-- 移动 -->
-    <el-dialog v-model="moveVisible" title="移动到..." width="500px">
+    <el-dialog v-model="moveVisible" :title="_batchMoveItems.length > 0 ? `批量移动 ${_batchMoveItems.length} 项` : '移动到...'" width="500px">
       <el-tree :data="moveDirTree" :props="{ label: 'dirName', children: 'children' }"
         node-key="dirId" highlight-current accordion @node-click="handleMoveTargetSelect" />
       <template #footer>
@@ -244,11 +267,11 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Lock, Key, FolderAdd, Upload, Refresh, Folder, Document,
-  Download, Edit, Delete, MoreFilled, Rank, Unlock, UploadFilled
+  Download, Edit, Delete, MoreFilled, Rank, Unlock, UploadFilled, Search
 } from '@element-plus/icons-vue'
 import { privateSpaceAPI, directoryAPI, fileAPI, userAPI } from '../api'
 import { useUserStore } from '../stores/user'
@@ -259,7 +282,7 @@ const userStore = useUserStore()
 // ==================== 密码验证 ====================
 const pwdInput = ref('')
 const verifyLoading = ref(false)
-const verified = ref(false)
+const verified = ref(!!userStore.privatePassword)  // 会话内已解锁则跳过锁屏
 
 // 如果 store 中已有密码，直接使用
 const hasExistingPassword = ref(false)
@@ -283,6 +306,110 @@ const breadcrumb = ref([])
 const directories = ref([])
 const files = ref([])
 const loading = ref(false)
+
+const allItems = computed(() => {
+  const dirs = directories.value.map(d => ({
+    id: d.dirId, name: d.dirName, type: '文件夹', isDir: true,
+    size: 0, time: d.createTime, order: 0, original: d
+  }))
+  const fls = files.value.map(f => ({
+    id: f.fileId, name: f.fileName, type: f.fileType || '未知', isDir: false,
+    size: f.fileSize, time: f.uploadTime, order: 1, original: f
+  }))
+  return [...dirs, ...fls]
+})
+
+function onRowClick(row) {
+  if (row.isDir) navigateToDir(row.id, row.name)
+}
+
+// ==================== 筛选 ====================
+const filterText = ref('')
+const filterType = ref('')
+const selectedItems = ref([])
+const tableRef = ref(null)
+
+const fileTypeOptions = computed(() => {
+  const types = new Set()
+  files.value.forEach(f => { if (f.fileType) types.add(f.fileType) })
+  return [...types].sort()
+})
+
+const filteredItems = computed(() => {
+  let items = allItems.value
+  if (filterText.value) {
+    const q = filterText.value.toLowerCase()
+    items = items.filter(i => i.name.toLowerCase().includes(q))
+  }
+  if (filterType.value) {
+    items = items.filter(i => filterType.value === '文件夹' ? i.isDir : i.type === filterType.value)
+  }
+  return items
+})
+
+function onSelectionChange(selection) {
+  selectedItems.value = selection
+}
+
+// ==================== 批量操作 ====================
+
+async function batchDelete() {
+  if (selectedItems.value.length === 0) return
+  try {
+    await ElMessageBox.confirm(
+      `确定要删除选中的 ${selectedItems.value.length} 个文件/文件夹吗？`,
+      '批量删除', { confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning' }
+    )
+  } catch { return }
+  let ok = 0
+  for (const item of selectedItems.value) {
+    try {
+      if (item.isDir) {
+        await directoryAPI.remove(item.id)
+      } else {
+        await fileAPI.remove(item.id)
+      }
+      ok++
+    } catch { /* skip */ }
+  }
+  ElMessage.success(`成功删除 ${ok} 项`)
+  await refreshCurrentDir()
+}
+
+const _batchMoveItems = ref([])
+
+async function batchMove() {
+  if (selectedItems.value.length === 0) return
+  moveFileTarget.value = null
+  _batchMoveItems.value = selectedItems.value
+  moveTargetDirId.value = null
+  moveDirTree.value = await buildPrivateDirTree(userStore.privateSpaceRootDirId)
+  moveVisible.value = true
+}
+
+async function batchDecrypt() {
+  if (selectedItems.value.length === 0) return
+  const filesToDecrypt = selectedItems.value.filter(i => !i.isDir)
+  if (filesToDecrypt.length === 0) {
+    ElMessage.warning('请至少选择一个文件')
+    return
+  }
+  try {
+    await ElMessageBox.confirm(
+      `确定将 ${filesToDecrypt.length} 个文件移出私密空间吗？`,
+      '批量移出私密空间', { confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning' }
+    )
+  } catch { return }
+  let ok = 0
+  for (const item of filesToDecrypt) {
+    try {
+      await fileAPI.decrypt(item.id, userStore.privatePassword)
+      ok++
+    } catch { /* skip */ }
+  }
+  ElMessage.success(`成功移出 ${ok} 个文件`)
+  await refreshCurrentDir()
+}
 
 async function navigateToDir(dirId, dirName) {
   currentDirId.value = dirId
@@ -319,7 +446,6 @@ async function loadFiles(dirId) {
 async function refreshCurrentDir() {
   await loadDirectories(currentDirId.value)
   if (currentDirId.value) await loadFiles(currentDirId.value)
-  ElMessage.success('已刷新')
 }
 
 async function initFileManager() {
@@ -422,9 +548,16 @@ async function doRenameFile() {
 // 上传（自动加密）
 const uploadVisible = ref(false)
 const uploadFile = ref(null)
+const uploadRef = ref(null)
 const uploadLoading = ref(false)
 
-function openUpload() { uploadFile.value = null; uploadVisible.value = true }
+function openUpload() {
+  uploadFile.value = null
+  uploadVisible.value = true
+  // 清空 el-upload 内部文件列表
+  const ref = uploadRef.value
+  if (ref) ref.clearFiles()
+}
 function handleUploadChange(item) { uploadFile.value = item.raw }
 function handleUploadRemove() { uploadFile.value = null }
 
@@ -464,7 +597,9 @@ const moveTargetDirId = ref(null)
 const moveLoading = ref(false)
 
 async function openMove(file) {
-  moveFileTarget.value = file; moveTargetDirId.value = null
+  moveFileTarget.value = file
+  _batchMoveItems.value = []
+  moveTargetDirId.value = null
   moveDirTree.value = await buildPrivateDirTree(userStore.privateSpaceRootDirId)
   moveVisible.value = true
 }
@@ -484,6 +619,25 @@ async function buildPrivateDirTree(parentId) {
 function handleMoveTargetSelect(node) { moveTargetDirId.value = node.dirId }
 
 async function doMove() {
+  // 批量移动
+  if (_batchMoveItems.value.length > 0) {
+    if (!moveTargetDirId.value) { ElMessage.warning('请选择目标文件夹'); return }
+    moveLoading.value = true
+    let ok = 0
+    for (const item of _batchMoveItems.value) {
+      try {
+        if (!item.isDir) await fileAPI.move(item.id, moveTargetDirId.value)
+        ok++
+      } catch { /* skip */ }
+    }
+    moveLoading.value = false
+    ElMessage.success(`成功移动 ${ok} 项`)
+    moveVisible.value = false
+    _batchMoveItems.value = []
+    await refreshCurrentDir()
+    return
+  }
+  // 单文件移动
   if (!moveTargetDirId.value) { ElMessage.warning('请选择目标文件夹'); return }
   moveLoading.value = true
   try {

@@ -41,12 +41,16 @@ public class PrivateSpaceController {
     public Result<String> disablePrivateSpace(
             @RequestHeader("Authorization") String authHeader,
             @RequestParam("password") String password) throws Exception {
-        boolean ok = privateSpaceService.disablePrivateSpace(
-                Long.parseLong((String) TokenProcess.getAttributeFromToken(authHeader, "userId")), password);
-        if (ok) {
-            return Result.success("私密空间已关闭");
+        try {
+            boolean ok = privateSpaceService.disablePrivateSpace(
+                    Long.parseLong((String) TokenProcess.getAttributeFromToken(authHeader, "userId")), password);
+            if (ok) {
+                return Result.success("私密空间已关闭");
+            }
+            return Result.error("私密空间关闭失败，密码错误或未启用");
+        } catch (RuntimeException e) {
+            return Result.error(e.getMessage());
         }
-        return Result.error("私密空间关闭失败，密码错误或未启用");
     }
 
     @PostMapping("/user/privateSpace/verify")

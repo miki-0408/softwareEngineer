@@ -189,6 +189,12 @@ a {
   font-size: 11px;
 }
 
+/* 私密空间已开启：菜单高亮 */
+.sidebar-nav .el-menu-item.ps-active {
+  background: rgba(103, 194, 58, 0.1) !important;
+  border-left: 3px solid var(--success);
+}
+
 /* ==================== 文件管理 ==================== */
 .toolbar {
   display: flex;
@@ -252,6 +258,15 @@ a {
 /* ==================== 弹窗内边距 ==================== */
 .dialog-body-padded {
   padding: 8px 0;
+}
+
+/* 统一列表：文件夹名称可点击 */
+.item-name {
+  cursor: pointer;
+  color: var(--text-primary);
+}
+.item-name:hover {
+  color: var(--primary);
 }
 
 /* ==================== 通用 ==================== */
