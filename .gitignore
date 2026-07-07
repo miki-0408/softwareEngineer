@@ -1,0 +1,16 @@
+# === IDEA ===
+.idea/
+*.iml
+
+# === 后端 ===
+back_end/target/
+back_end/uploads/
+
+# === 前端 ===
+front_end/node_modules/
+front_end/dist/
+
+# === 系统 ===
+.DS_Store
+Thumbs.db
+*.log
