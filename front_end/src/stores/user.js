@@ -7,6 +7,7 @@ export const useUserStore = defineStore('user', () => {
   const role = ref(localStorage.getItem('role') || '')
   const username = ref(localStorage.getItem('username') || '')
   const avatar = ref(localStorage.getItem('avatar') || '')
+  const gender = ref(localStorage.getItem('gender') || '')
 
   // 存储空间
   const totalSpace = ref(0)
@@ -14,9 +15,9 @@ export const useUserStore = defineStore('user', () => {
   const remainSpace = ref(0)
 
   // 私密空间状态
-  const privateSpaceEnabled = ref(false)
-  const privateSpaceRootDirId = ref('')    // 私密空间根目录 ID
-  const privatePassword = ref('')          // 会话内缓存的私密密码
+  const privateSpaceEnabled = ref(sessionStorage.getItem('ps_enabled') === 'true')
+  const privateSpaceRootDirId = ref(sessionStorage.getItem('ps_root') || '')
+  const privatePassword = ref(sessionStorage.getItem('ps_pwd') || '')
 
   const isLoggedIn = computed(() => !!token.value)
   const isAdmin = computed(() => role.value === 'admin')
@@ -29,12 +30,14 @@ export const useUserStore = defineStore('user', () => {
     role.value = user.role
     username.value = user.name
     avatar.value = user.avatar || ''
+    gender.value = user.sex || ''
 
     localStorage.setItem('token', t)
     localStorage.setItem('userId', user.userId)
     localStorage.setItem('role', user.role)
     localStorage.setItem('username', user.name)
     localStorage.setItem('avatar', user.avatar || '')
+    localStorage.setItem('gender', user.sex || '')
   }
 
   function setStorageInfo(storage) {
@@ -45,21 +48,29 @@ export const useUserStore = defineStore('user', () => {
 
   function setPrivateSpaceStatus(enabled, rootDirId) {
     privateSpaceEnabled.value = enabled
-    if (rootDirId) privateSpaceRootDirId.value = rootDirId
+    sessionStorage.setItem('ps_enabled', enabled ? 'true' : 'false')
+    if (rootDirId) {
+      privateSpaceRootDirId.value = rootDirId
+      sessionStorage.setItem('ps_root', rootDirId)
+    }
   }
 
   function setPrivatePassword(password) {
     privatePassword.value = password
+    sessionStorage.setItem('ps_pwd', password)
   }
 
   function clearPrivateAccess() {
     privatePassword.value = ''
+    sessionStorage.removeItem('ps_pwd')
   }
 
   function updateUserInfo(name, sex, ava) {
     username.value = name
-    avatar.value = ava || avatar.value
+    if (sex) gender.value = sex
+    if (ava) avatar.value = ava
     localStorage.setItem('username', name)
+    if (sex) localStorage.setItem('gender', sex)
     if (ava) localStorage.setItem('avatar', ava)
   }
 
@@ -69,6 +80,13 @@ export const useUserStore = defineStore('user', () => {
     role.value = ''
     username.value = ''
     avatar.value = ''
+    gender.value = ''
+    privatePassword.value = ''
+    privateSpaceEnabled.value = false
+    privateSpaceRootDirId.value = ''
+    sessionStorage.removeItem('ps_pwd')
+    sessionStorage.removeItem('ps_enabled')
+    sessionStorage.removeItem('ps_root')
     localStorage.clear()
   }
 
@@ -81,7 +99,7 @@ export const useUserStore = defineStore('user', () => {
   }
 
   return {
-    token, userId, role, username, avatar,
+    token, userId, role, username, avatar, gender,
     totalSpace, usedSpace, remainSpace,
     privateSpaceEnabled, privateSpaceRootDirId, privatePassword,
     isLoggedIn, isAdmin, hasPrivateAccess,

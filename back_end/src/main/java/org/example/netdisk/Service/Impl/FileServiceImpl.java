@@ -12,7 +12,7 @@ import org.example.netdisk.ResponseDTO.R_File;
 import org.example.netdisk.Service.Inter.FileService;
 import org.example.netdisk.Service.Support.FileStorageService;
 import org.example.netdisk.Service.Support.TransformService;
-import org.example.netdisk.Utils.StandardCompression;
+import org.example.netdisk.Utils.LZ77Compression;
 import org.example.netdisk.Utils.StandardEncryption;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -74,7 +74,7 @@ public class FileServiceImpl implements FileService {
             if (encrypt) {
                 rawBytes = StandardEncryption.encrypt(rawBytes, privatePassword);
             }
-            byte[] storedBytes = StandardCompression.compress(rawBytes);
+            byte[] storedBytes = LZ77Compression.compress(rawBytes);
             long storedSize = storedBytes.length;
 
             StorageSpace storageSpace = storageSpaceMapper.selectByUserId(userId);
@@ -113,7 +113,7 @@ public class FileServiceImpl implements FileService {
             throw new RuntimeException("文件不存在");
         }
         byte[] storedBytes = fileStorageService.readStoredFile(netdiskFile.getPath());
-        byte[] rawBytes = StandardCompression.decompress(storedBytes);
+        byte[] rawBytes = LZ77Compression.decompress(storedBytes);
         if (netdiskFile.getIsEncrypted() == encrypted) {
             privateSpaceService.validatePrivatePassword(userId, privatePassword);
             rawBytes = StandardEncryption.decrypt(rawBytes, privatePassword);
@@ -220,9 +220,9 @@ public class FileServiceImpl implements FileService {
         }
 
         byte[] storedBytes = fileStorageService.readStoredFile(netdiskFile.getPath());
-        byte[] rawBytes = StandardCompression.decompress(storedBytes);
+        byte[] rawBytes = LZ77Compression.decompress(storedBytes);
         byte[] encryptedBytes = StandardEncryption.encrypt(rawBytes, privatePassword);
-        byte[] newStoredBytes = StandardCompression.compress(encryptedBytes);
+        byte[] newStoredBytes = LZ77Compression.compress(encryptedBytes);
         fileStorageService.deleteStoredFile(netdiskFile.getPath());
         String newPath = fileStorageService.saveCompressedFile(newStoredBytes, userId, netdiskFile.getFileId());
 
@@ -250,9 +250,9 @@ public class FileServiceImpl implements FileService {
         privateSpaceService.validatePrivatePassword(userId, privatePassword);
 
         byte[] storedBytes = fileStorageService.readStoredFile(netdiskFile.getPath());
-        byte[] encryptedBytes = StandardCompression.decompress(storedBytes);
+        byte[] encryptedBytes = LZ77Compression.decompress(storedBytes);
         byte[] rawBytes = StandardEncryption.decrypt(encryptedBytes, privatePassword);
-        byte[] newStoredBytes = StandardCompression.compress(rawBytes);
+        byte[] newStoredBytes = LZ77Compression.compress(rawBytes);
         fileStorageService.deleteStoredFile(netdiskFile.getPath());
         String newPath = fileStorageService.saveCompressedFile(newStoredBytes, userId, netdiskFile.getFileId());
 

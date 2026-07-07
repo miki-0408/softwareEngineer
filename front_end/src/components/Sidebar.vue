@@ -13,32 +13,34 @@
         router
         @select="handleSelect"
       >
-        <el-menu-item index="files" :route="{ path: '/main' }">
-          <el-icon><FolderOpened /></el-icon>
-          <span>我的文件</span>
-        </el-menu-item>
+        <!-- 普通用户菜单 -->
+        <template v-if="!userStore.isAdmin">
+          <el-menu-item index="files" :route="{ path: '/main' }">
+            <el-icon><FolderOpened /></el-icon>
+            <span>我的文件</span>
+          </el-menu-item>
 
-        <el-menu-item index="recycle" :route="{ path: '/recycle' }">
-          <el-icon><Delete /></el-icon>
-          <span>回收站</span>
-        </el-menu-item>
+          <el-menu-item index="recycle" :route="{ path: '/recycle' }">
+            <el-icon><Delete /></el-icon>
+            <span>回收站</span>
+          </el-menu-item>
 
-        <el-menu-item index="private" :route="{ path: '/private' }"
-          :class="{ 'ps-active': userStore.privateSpaceEnabled }">
-          <el-icon><Lock /></el-icon>
-          <span>私密空间</span>
-          <el-icon v-if="userStore.privateSpaceEnabled" size="12" color="#67c23a"
-            style="margin-left:auto;margin-right:8px"><CircleCheckFilled /></el-icon>
-        </el-menu-item>
+          <el-menu-item index="private" :route="{ path: '/private' }"
+            :class="{ 'ps-active': userStore.privateSpaceEnabled }">
+            <el-icon><Lock /></el-icon>
+            <span>私密空间</span>
+            <el-icon v-if="userStore.privateSpaceEnabled" size="12" color="#67c23a"
+              style="margin-left:auto;margin-right:8px"><CircleCheckFilled /></el-icon>
+          </el-menu-item>
+        </template>
 
-        <el-menu-item
-          v-if="userStore.isAdmin"
-          index="admin"
-          :route="{ path: '/admin' }"
-        >
-          <el-icon><Setting /></el-icon>
-          <span>管理后台</span>
-        </el-menu-item>
+        <!-- 管理员菜单 -->
+        <template v-if="userStore.isAdmin">
+          <el-menu-item index="admin" :route="{ path: '/admin' }">
+            <el-icon><Setting /></el-icon>
+            <span>管理后台</span>
+          </el-menu-item>
+        </template>
       </el-menu>
     </div>
 
@@ -49,7 +51,7 @@
         <div class="sidebar-user-info">
           <div class="sidebar-user-name">{{ userStore.username }}</div>
           <div class="sidebar-user-role">
-            {{ userStore.isAdmin ? '管理员' : '普通用户' }}
+            {{ userStore.isAdmin ? '管理员' : '普通用户' }}<span v-if="userStore.gender"> · {{ userStore.gender }}</span>
           </div>
         </div>
         <el-popconfirm title="确定要退出登录吗？" @confirm="handleLogout">

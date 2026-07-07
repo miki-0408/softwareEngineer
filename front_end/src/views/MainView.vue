@@ -37,6 +37,9 @@
             </div>
           </el-popover>
 
+          <el-button @click="openProfileDialog">
+            <el-icon><User /></el-icon> 个人信息
+          </el-button>
           <el-button @click="openPasswordDialog">
             <el-icon><Key /></el-icon> 修改密码
           </el-button>
@@ -265,6 +268,38 @@
       </template>
     </el-dialog>
 
+    <!-- 个人信息 -->
+    <el-dialog v-model="profileVisible" title="个人信息" width="440px">
+      <el-form ref="profileFormRef" :model="profileForm" :rules="profileRules" label-position="top">
+        <el-form-item label="用户名" prop="newUsername">
+          <el-input v-model="profileForm.newUsername" placeholder="请输入新用户名" maxlength="100" />
+        </el-form-item>
+        <el-form-item label="性别">
+          <el-radio-group v-model="profileForm.newGender">
+            <el-radio value="男">男</el-radio>
+            <el-radio value="女">女</el-radio>
+            <el-radio value="未知">保密</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item label="头像">
+          <el-upload
+            :auto-upload="false"
+            :limit="1"
+            accept="image/*"
+            :on-change="handleProfileAvatarChange"
+            :on-remove="handleProfileAvatarRemove"
+          >
+            <el-button size="small" type="primary" plain>选择新头像</el-button>
+            <template #tip><span class="text-muted" style="margin-left:8px">留空则不修改</span></template>
+          </el-upload>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="profileVisible = false">取消</el-button>
+        <el-button type="primary" :loading="profileLoading" @click="doUpdateProfile">保存</el-button>
+      </template>
+    </el-dialog>
+
     <!-- 修改密码 -->
     <el-dialog v-model="passwordVisible" title="修改密码" width="400px">
       <el-form ref="pwdFormRef" :model="pwdForm" :rules="pwdRules" label-position="top">
@@ -302,7 +337,7 @@ import { ref, reactive, computed, onMounted, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   HomeFilled, FolderAdd, Upload, Refresh, Folder, Document,
-  Download, Edit, Delete, MoreFilled, Rank, Lock, Unlock, Key, UploadFilled, Search
+  Download, Edit, Delete, MoreFilled, Rank, Lock, Unlock, Key, UploadFilled, Search, User
 } from '@element-plus/icons-vue'
 import { directoryAPI, fileAPI } from '../api'
 import { useUserStore } from '../stores/user'
@@ -816,6 +851,48 @@ function cancelPrivatePwd() {
   }
 }
 
+// ==================== 个人信息 ====================
+const profileVisible = ref(false)
+const profileFormRef = ref(null)
+const profileForm = reactive({ newUsername: '', newGender: '未知' })
+const profileAvatarFile = ref(null)
+const profileLoading = ref(false)
+const profileRules = {
+  newUsername: [{ required: true, message: '请输入用户名', trigger: 'blur' }]
+}
+
+function openProfileDialog() {
+  profileForm.newUsername = userStore.username
+  profileForm.newGender = userStore.gender || '未知'
+  profileAvatarFile.value = null
+  profileVisible.value = true
+}
+
+function handleProfileAvatarChange(uploadFile) {
+  profileAvatarFile.value = uploadFile.raw
+}
+function handleProfileAvatarRemove() {
+  profileAvatarFile.value = null
+}
+
+async function doUpdateProfile() {
+  const valid = await profileFormRef.value.validate().catch(() => false)
+  if (!valid) return
+  profileLoading.value = true
+  try {
+    const { userAPI } = await import('../api')
+    await userAPI.updateUserInfo(profileForm.newUsername, profileForm.newGender || null, profileAvatarFile.value)
+    // 重新拉取用户信息以获取正确的头像 URL
+    const infoRes = await userAPI.getUserInfo(userStore.userId)
+    const info = infoRes.data.data
+    userStore.updateUserInfo(info.user.name, info.user.sex, info.user.avatar)
+    userStore.setStorageInfo(info.storage)
+    ElMessage.success('个人信息已更新')
+    profileVisible.value = false
+  } catch { /* ignore */ }
+  finally { profileLoading.value = false }
+}
+
 // ==================== 修改密码 ====================
 const passwordVisible = ref(false)
 const pwdFormRef = ref(null)
@@ -847,10 +924,8 @@ async function doChangePassword() {
   try {
     const { userAPI } = await import('../api')
     await userAPI.changePassword(pwdForm.oldPassword, pwdForm.newPassword)
-    ElMessage.success('密码已修改，请重新登录')
+    ElMessage.success('密码已修改')
     passwordVisible.value = false
-    userStore.logout()
-    window.location.href = '/'
   } catch { /* ignore */ }
   finally { pwdLoading.value = false }
 }
