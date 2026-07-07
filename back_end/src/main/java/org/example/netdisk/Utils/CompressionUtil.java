@@ -34,6 +34,9 @@ public class CompressionUtil {
         }
         return LZ77Compression.compress(data);
     }
+    /*mynb
+     */
+
 
     /**
      * 解压缩数据
