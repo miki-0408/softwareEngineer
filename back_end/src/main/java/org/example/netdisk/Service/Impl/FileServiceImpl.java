@@ -13,7 +13,7 @@ import org.example.netdisk.Service.Inter.FileService;
 import org.example.netdisk.Service.Support.FileStorageService;
 import org.example.netdisk.Service.Support.TransformService;
 import org.example.netdisk.Utils.LZ77Compression;
-import org.example.netdisk.Utils.StandardEncryption;
+import org.example.netdisk.Utils.EncryptionUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -72,7 +72,7 @@ public class FileServiceImpl implements FileService {
         try {
             byte[] rawBytes = file.getBytes();
             if (encrypt) {
-                rawBytes = StandardEncryption.encrypt(rawBytes, privatePassword);
+                rawBytes = EncryptionUtil.encrypt(rawBytes, privatePassword);
             }
             byte[] storedBytes = LZ77Compression.compress(rawBytes);
             long storedSize = storedBytes.length;
@@ -116,7 +116,7 @@ public class FileServiceImpl implements FileService {
         byte[] rawBytes = LZ77Compression.decompress(storedBytes);
         if (netdiskFile.getIsEncrypted() == encrypted) {
             privateSpaceService.validatePrivatePassword(userId, privatePassword);
-            rawBytes = StandardEncryption.decrypt(rawBytes, privatePassword);
+            rawBytes = EncryptionUtil.decrypt(rawBytes, privatePassword);
         }
         return rawBytes;
     }
@@ -221,7 +221,7 @@ public class FileServiceImpl implements FileService {
 
         byte[] storedBytes = fileStorageService.readStoredFile(netdiskFile.getPath());
         byte[] rawBytes = LZ77Compression.decompress(storedBytes);
-        byte[] encryptedBytes = StandardEncryption.encrypt(rawBytes, privatePassword);
+        byte[] encryptedBytes = EncryptionUtil.encrypt(rawBytes, privatePassword);
         byte[] newStoredBytes = LZ77Compression.compress(encryptedBytes);
         fileStorageService.deleteStoredFile(netdiskFile.getPath());
         String newPath = fileStorageService.saveCompressedFile(newStoredBytes, userId, netdiskFile.getFileId());
@@ -251,7 +251,7 @@ public class FileServiceImpl implements FileService {
 
         byte[] storedBytes = fileStorageService.readStoredFile(netdiskFile.getPath());
         byte[] encryptedBytes = LZ77Compression.decompress(storedBytes);
-        byte[] rawBytes = StandardEncryption.decrypt(encryptedBytes, privatePassword);
+        byte[] rawBytes = EncryptionUtil.decrypt(encryptedBytes, privatePassword);
         byte[] newStoredBytes = LZ77Compression.compress(rawBytes);
         fileStorageService.deleteStoredFile(netdiskFile.getPath());
         String newPath = fileStorageService.saveCompressedFile(newStoredBytes, userId, netdiskFile.getFileId());
