@@ -81,7 +81,7 @@ const avatarUrl = computed(() => {
   const av = userStore.avatar
   if (!av) return ''
   if (av.startsWith('http')) return av
-  return '/api' + av
+  return import.meta.env.PROD ? av : '/api' + av
 })
 
 function handleSelect(index) {

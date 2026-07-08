@@ -8,7 +8,7 @@
         <el-breadcrumb separator="/">
           <el-breadcrumb-item v-for="(item, idx) in breadcrumb" :key="item.dirId">
             <el-icon v-if="idx === 0"><Lock /></el-icon>
-            <el-link type="primary" :underline="false" @click="navigateToBreadcrumb(idx)">
+            <el-link type="primary" underline="never" @click="navigateToBreadcrumb(idx)">
               {{ item.dirName }}
             </el-link>
           </el-breadcrumb-item>

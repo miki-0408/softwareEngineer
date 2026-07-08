@@ -93,6 +93,7 @@ public class FileStorageService {
     }
 
     private String buildFileUrl(String relFolder, String filename) {
+        relFolder = relFolder.replace('\\', '/');
         String folderUrl = ensureTrailingSlash(uploadUrlPrefix) + (relFolder.startsWith("/") ? relFolder.substring(1) : relFolder);
         if (!folderUrl.endsWith("/")) {
             folderUrl = folderUrl + "/";

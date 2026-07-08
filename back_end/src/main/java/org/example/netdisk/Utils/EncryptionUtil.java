@@ -24,7 +24,7 @@ import java.util.Arrays;
  * │    - 适合学习但不适合生产                                      │
  * └──────────────────────────────────────────────────────────────┘
  *
- * 标准参考实现见 StandardEncryption.java（AES-256-GCM + PBKDF2）
+ * 标准参考实现见 AES-256-GCM + PBKDF2）
  */
 public class EncryptionUtil {
 
