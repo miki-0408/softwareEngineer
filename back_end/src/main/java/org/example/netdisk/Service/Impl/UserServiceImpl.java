@@ -76,7 +76,7 @@ public class UserServiceImpl implements UserService {
         if (!BcryptUtil.matches(password, user.getPassword())) {
             return Map.of("rLoginDTO", "null", "message", "密码错误");
         }
-        Claims claims = new Claims(user.getName(), String.valueOf(user.getUserId()), user.getRole(), login);
+        Claims claims = new Claims(String.valueOf(user.getUserId()), user.getRole());
         String token = JwtUtil.genToken(claims.toMap());
         R_User rUser = transformService.transformUserToRUser(user);
         R_LoginDTO loginDTO = new R_LoginDTO();

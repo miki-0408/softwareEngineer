@@ -17,10 +17,6 @@ public class Enum {
     public static final int privateSpaceDisabled = 0;
     public static final int privateSpaceEnabled = 1;
 
-    public static final int login = 0;
-    public static final int updatePWD = 1;
-    public static final int privateSpaceVerify = 2;
-
     public static final long defaultTotalSpace = 10737418240L;
     public static final String defaultPWD = "password123";
     public static final String rootDirName = "我的文件";

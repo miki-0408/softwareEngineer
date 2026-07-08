@@ -14,9 +14,7 @@ public class TokenProcess {
         Claims claims = Claims.fromMap(map);
         Object value = switch (key) {
             case "userId" -> claims.userId();
-            case "username" -> claims.username();
             case "role" -> claims.role();
-            case "type" -> claims.type();
             default -> throw new Exception("Invalid key: " + key);
         };
         if (value == null) {

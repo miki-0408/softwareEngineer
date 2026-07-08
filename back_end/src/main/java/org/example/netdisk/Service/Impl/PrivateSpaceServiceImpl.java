@@ -95,7 +95,7 @@ public class PrivateSpaceServiceImpl implements PrivateSpaceService {
         }
         User user = userMapper.selectUserById(userId);
         String token = JwtUtil.genToken(
-            new Claims(user.getName(), String.valueOf(userId), user.getRole(), privateSpaceVerify).toMap()
+            new Claims(String.valueOf(userId), user.getRole()).toMap()
         );
         R_VerifyPrivateSpaceDTO dto = new R_VerifyPrivateSpaceDTO();
         dto.setVerified(true);
