@@ -4,7 +4,6 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
-import java.util.Random;
 
 /**
  * 加密 / 解密工具
@@ -29,6 +28,8 @@ import java.util.Random;
  */
 public class EncryptionUtil {
 
+    private static final java.security.SecureRandom SECURE_RANDOM = new java.security.SecureRandom();
+
     /**
      * 加密数据
      * @param data     原始字节
@@ -40,8 +41,7 @@ public class EncryptionUtil {
 
         // 1. 生成随机盐值
         byte[] salt = new byte[8];
-        long seed = System.nanoTime() ^ (long) (Math.random() * Long.MAX_VALUE);
-        new Random(seed).nextBytes(salt);
+        SECURE_RANDOM.nextBytes(salt);
 
         // 2. 派生密钥流
         byte[] keystream = deriveKeystream(password, salt, data.length);
@@ -93,7 +93,12 @@ public class EncryptionUtil {
             while (generated < length) {
                 md.update(pwdBytes);
                 md.update(salt);
-                md.update((byte) counter);
+                md.update(new byte[] {
+                        (byte) (counter >> 24),
+                        (byte) (counter >> 16),
+                        (byte) (counter >> 8),
+                        (byte) counter
+                });
                 byte[] hash = md.digest();
                 int toCopy = Math.min(hash.length, length - generated);
                 System.arraycopy(hash, 0, keystream, generated, toCopy);
