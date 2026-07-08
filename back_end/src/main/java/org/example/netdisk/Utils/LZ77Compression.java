@@ -109,7 +109,9 @@ public class LZ77Compression {
             return new byte[0];
         }
 
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        // 用可增长的缓冲区替代 ByteArrayOutputStream，避免每次 match 都 toByteArray()
+        byte[] buf = new byte[Math.max(data.length * 2, 8192)];
+        int outPos = 0;
         int pos = 0;
 
         while (pos < data.length) {
@@ -117,32 +119,26 @@ public class LZ77Compression {
             pos++;
 
             if (flag == (TOKEN_END & 0xFF)) {
-                // 结束标记
                 break;
             } else if (flag == (TOKEN_LITERAL & 0xFF)) {
-                // Literal: 读取一个字节
-                out.write(data[pos]);
-                pos++;
+                if (outPos >= buf.length) buf = grow(buf, outPos);
+                buf[outPos++] = data[pos++];
             } else if (flag == (TOKEN_MATCH & 0xFF)) {
-                // Match: 读取距离 (2 字节) + 长度 (1 字节)
-                int distLo = data[pos] & 0xFF;
-                int distHi = data[pos + 1] & 0xFF;
-                int distance = distLo | (distHi << 8);
+                int distance = (data[pos] & 0xFF) | ((data[pos + 1] & 0xFF) << 8);
                 int length = (data[pos + 2] & 0xFF) + MIN_MATCH;
                 pos += 3;
 
-                // 从已输出的字节中复制
-                byte[] output = out.toByteArray();
-                int srcPos = output.length - distance;
+                int srcPos = outPos - distance;
+                while (outPos + length > buf.length) buf = grow(buf, outPos);
                 for (int i = 0; i < length; i++) {
-                    out.write(output[srcPos + i]);
+                    buf[outPos++] = buf[srcPos + i];
                 }
             } else {
                 throw new RuntimeException("解压失败：未知的 token 类型 " + flag);
             }
         }
 
-        return out.toByteArray();
+        return Arrays.copyOf(buf, outPos);
     }
 
     // ======================== 匹配查找 ========================
@@ -194,6 +190,12 @@ public class LZ77Compression {
             return new Match(bestDistance, bestLength);
         }
         return null;
+    }
+
+    private static byte[] grow(byte[] old, int minSize) {
+        byte[] next = new byte[Math.max(old.length * 2, minSize + 4096)];
+        System.arraycopy(old, 0, next, 0, Math.min(minSize, old.length));
+        return next;
     }
 
     // ======================== 匹配结果 ========================

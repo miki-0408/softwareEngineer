@@ -45,4 +45,8 @@ public interface FileMapper {
     /** 统计私密空间某目录下文件数 */
     @Select("SELECT COUNT(*) FROM file WHERE userId = #{userId} AND dirId = #{dirId} AND status = 0 AND isEncrypted = 1")
     int countPrivateFilesInDirectory(@Param("userId") Long userId, @Param("dirId") Long dirId);
+
+    /** 检查某目录下是否存在同名文件 */
+    @Select("SELECT COUNT(*) FROM file WHERE userId = #{userId} AND dirId = #{dirId} AND fileName = #{fileName} AND status = 0")
+    int countFilesByName(@Param("userId") Long userId, @Param("dirId") Long dirId, @Param("fileName") String fileName);
 }

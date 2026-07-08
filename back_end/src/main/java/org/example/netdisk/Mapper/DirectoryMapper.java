@@ -29,4 +29,8 @@ public interface DirectoryMapper {
 
     @Select("SELECT * FROM directory WHERE userId = #{userId} AND parentDirId IS NULL")
     List<Directory> selectRootDirectories(@Param("userId") Long userId);
+
+    /** 检查父目录下是否存在同名子目录 */
+    @Select("SELECT COUNT(*) FROM directory WHERE userId = #{userId} AND parentDirId = #{parentDirId} AND dirName = #{dirName}")
+    int countDirsByName(@Param("userId") Long userId, @Param("parentDirId") Long parentDirId, @Param("dirName") String dirName);
 }

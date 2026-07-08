@@ -24,6 +24,16 @@ public class DirectoryServiceImpl implements DirectoryService {
     @Autowired
     private TransformService transformService;
 
+    private String uniqueDirName(Long userId, Long parentDirId, String dirName) {
+        String candidate = dirName;
+        int n = 1;
+        while (directoryMapper.countDirsByName(userId, parentDirId, candidate) > 0) {
+            candidate = dirName + " (" + n + ")";
+            n++;
+        }
+        return candidate;
+    }
+
     @Override
     public R_Directory createDirectory(Long userId, String dirName, Long parentDirId) {
         if (parentDirId != null) {
@@ -32,6 +42,7 @@ public class DirectoryServiceImpl implements DirectoryService {
                 throw new RuntimeException("父目录不存在");
             }
         }
+        dirName = uniqueDirName(userId, parentDirId, dirName);
         Directory directory = new Directory();
         directory.setDirName(dirName);
         directory.setParentDirId(parentDirId);
@@ -61,6 +72,7 @@ public class DirectoryServiceImpl implements DirectoryService {
         if (directory == null) {
             return false;
         }
+        newDirName = uniqueDirName(userId, directory.getParentDirId(), newDirName);
         directory.setDirName(newDirName);
         return directoryMapper.updateDirectoryName(directory) > 0;
     }

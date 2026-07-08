@@ -211,16 +211,62 @@
     </el-dialog>
 
     <!-- 上传 -->
-    <el-dialog v-model="uploadVisible" title="上传文件（自动加密）" width="440px">
-      <el-upload ref="uploadRef" :auto-upload="false" :limit="1"
-        :on-change="handleUploadChange" :on-remove="handleUploadRemove" drag>
-        <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
-        <div class="el-upload__text">将文件拖到此处或<em>点击选择</em></div>
-      </el-upload>
+    <el-dialog v-model="uploadVisible" title="上传文件（自动加密）" width="520px" @closed="clearUploadFiles">
+      <el-form label-position="top">
+        <el-form-item label="选择文件或文件夹">
+          <div class="flex-center gap-8" style="margin-bottom:8px">
+            <input ref="fileInputRef" type="file" multiple style="display:none"
+              @change="onFileInputChange" />
+            <input ref="folderInputRef" type="file" webkitdirectory style="display:none"
+              @change="onFolderInputChange" />
+            <el-button @click="fileInputRef.click()">
+              <el-icon><Document /></el-icon> 选择文件
+            </el-button>
+            <el-button @click="folderInputRef.click()">
+              <el-icon><Folder /></el-icon> 选择文件夹
+            </el-button>
+          </div>
+          <div v-if="uploadFiles.length > 0"
+            style="max-height:200px;overflow-y:auto;border:1px solid #e4e7ed;border-radius:6px;padding:8px">
+            <div v-for="(f, i) in uploadFiles" :key="i"
+              class="flex-between" style="padding:4px 0;border-bottom:1px solid #f0f0f0">
+              <span style="font-size:13px">{{ f.relativePath || f.name }}</span>
+              <span class="text-muted" style="font-size:12px">{{ formatUploadSize(f.size) }}</span>
+              <el-button size="small" text type="danger" @click="removeUploadFile(i)">
+                <el-icon><Close /></el-icon>
+              </el-button>
+            </div>
+          </div>
+          <div v-else style="padding:24px;text-align:center;border:1px dashed #d9d9d9;border-radius:6px;color:#c0c4cc">
+            请选择文件或文件夹
+          </div>
+        </el-form-item>
+        <el-row :gutter="12">
+          <el-col :span="12">
+            <el-form-item label="打包方式">
+              <el-select v-model="uploadPackMethod" style="width:100%" @change="onPackMethodChange">
+                <el-option label="不打包" value="none" />
+                <el-option label="tar 归档" value="tar" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="压缩算法">
+              <el-select v-model="uploadCompressMethod" style="width:100%">
+                <el-option label="LZ77" value="lz77" />
+                <el-option label="Huffman" value="huffman" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-form-item v-if="uploadPackMethod === 'tar'" label="归档文件名">
+          <el-input v-model="uploadTarName" placeholder="默认：第一个文件名.tar" maxlength="200" />
+        </el-form-item>
+      </el-form>
       <template #footer>
         <el-button @click="uploadVisible = false">取消</el-button>
-        <el-button type="primary" :loading="uploadLoading" :disabled="!uploadFile" @click="doUpload">
-          上传（将自动加密）
+        <el-button type="primary" :loading="uploadLoading" :disabled="uploadFiles.length === 0" @click="doUpload">
+          上传（{{ uploadFiles.length }} 个，自动加密）
         </el-button>
       </template>
     </el-dialog>
@@ -271,7 +317,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Lock, Key, FolderAdd, Upload, Refresh, Folder, Document,
-  Download, Edit, Delete, MoreFilled, Rank, Unlock, UploadFilled, Search
+  Download, Edit, Delete, MoreFilled, Rank, Unlock, UploadFilled, Search, Close
 } from '@element-plus/icons-vue'
 import { privateSpaceAPI, directoryAPI, fileAPI, userAPI } from '../api'
 import { useUserStore } from '../stores/user'
@@ -547,30 +593,95 @@ async function doRenameFile() {
 
 // 上传（自动加密）
 const uploadVisible = ref(false)
-const uploadFile = ref(null)
-const uploadRef = ref(null)
+const uploadFiles = ref([])
+const fileInputRef = ref(null)
+const folderInputRef = ref(null)
+const uploadPackMethod = ref('none')
+const uploadTarName = ref('')
+const uploadCompressMethod = ref('lz77')
 const uploadLoading = ref(false)
 
 function openUpload() {
-  uploadFile.value = null
+  uploadFiles.value = []
+  uploadPackMethod.value = 'none'
+  uploadCompressMethod.value = 'lz77'
+  uploadTarName.value = ''
   uploadVisible.value = true
-  // 清空 el-upload 内部文件列表
-  const ref = uploadRef.value
-  if (ref) ref.clearFiles()
 }
-function handleUploadChange(item) { uploadFile.value = item.raw }
-function handleUploadRemove() { uploadFile.value = null }
+
+function onPackMethodChange(val) {
+  if (val === 'tar' && uploadFiles.value.length > 0) {
+    uploadTarName.value = uploadFiles.value[0].name.replace(/\.[^.]+$/, '') + '.tar'
+  }
+}
+
+function ensureTarSuffix(name) {
+  return name.endsWith('.tar') ? name : name + '.tar'
+}
+
+function clearUploadFiles() {
+  uploadFiles.value = []
+  if (fileInputRef.value) fileInputRef.value.value = ''
+  if (folderInputRef.value) folderInputRef.value.value = ''
+}
+
+function onFileInputChange(e) {
+  for (const f of e.target.files) {
+    uploadFiles.value.push({ name: f.name, size: f.size, relativePath: f.webkitRelativePath || f.name, raw: f })
+  }
+  e.target.value = ''
+}
+
+function onFolderInputChange(e) {
+  for (const f of e.target.files) {
+    uploadFiles.value.push({ name: f.name, size: f.size, relativePath: f.webkitRelativePath, raw: f })
+  }
+  e.target.value = ''
+}
+
+function removeUploadFile(index) {
+  uploadFiles.value.splice(index, 1)
+}
+
+function formatUploadSize(bytes) {
+  if (bytes < 1024) return bytes + ' B'
+  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB'
+  return (bytes / 1048576).toFixed(1) + ' MB'
+}
 
 async function doUpload() {
-  if (!uploadFile.value) return
+  if (uploadFiles.value.length === 0) return
   if (!currentDirId.value) {
     ElMessage.error('目录信息未加载，请刷新页面重试')
     return
   }
   uploadLoading.value = true
   try {
-    await fileAPI.upload(currentDirId.value, uploadFile.value, true, userStore.privatePassword)
-    ElMessage.success('已加密上传')
+    if (uploadPackMethod.value === 'none') {
+      let targetDirId = currentDirId.value
+      const firstRp = uploadFiles.value[0].relativePath
+      if (firstRp && firstRp.includes('/')) {
+        const folderName = firstRp.split('/')[0]
+        try {
+          const res = await directoryAPI.create(folderName, currentDirId.value)
+          targetDirId = Number(res.data.data.dirId)
+        } catch { /* skip */ }
+      }
+      let ok = 0
+      for (const f of uploadFiles.value) {
+        try {
+          const cleanFile = new File([f.raw], f.name, { type: f.raw.type || 'application/octet-stream' })
+          await fileAPI.upload(targetDirId, cleanFile, true, userStore.privatePassword, 'none', uploadCompressMethod.value)
+          ok++
+        } catch { /* skip */ }
+      }
+      ElMessage.success(`成功上传 ${ok} 个文件`)
+    } else {
+      await fileAPI.multiUpload(currentDirId.value, uploadFiles.value, true, userStore.privatePassword,
+        'tar', uploadCompressMethod.value,
+        uploadTarName.value ? ensureTarSuffix(uploadTarName.value) : undefined)
+      ElMessage.success('已加密上传')
+    }
     uploadVisible.value = false
     await refreshCurrentDir()
   } catch { /* ignore */ }
@@ -581,7 +692,25 @@ async function doUpload() {
 async function downloadFile(file) {
   try {
     const res = await fileAPI.download(file.fileId, userStore.privatePassword)
-    const url = window.URL.createObjectURL(new Blob([res.data]))
+    const blob = new Blob([res.data])
+
+    if (window.showSaveFilePicker) {
+      try {
+        const handle = await window.showSaveFilePicker({
+          suggestedName: file.fileName,
+          types: [{ description: '文件', accept: { 'application/octet-stream': ['.' + (file.fileType || 'dat')] } }]
+        })
+        const writable = await handle.createWritable()
+        await writable.write(blob)
+        await writable.close()
+        ElMessage.success('文件已保存')
+        return
+      } catch (e) {
+        if (e.name === 'AbortError') return  // 用户取消
+      }
+    }
+
+    const url = window.URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url; a.download = file.fileName
     document.body.appendChild(a); a.click(); document.body.removeChild(a)

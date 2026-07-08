@@ -134,14 +134,32 @@ export const fileAPI = {
     return http.post('/user/file/list', params)
   },
 
-  upload(dirId, file, encrypt, privatePassword) {
+  upload(dirId, file, encrypt, privatePassword, packMethod, compressMethod) {
     const fd = new FormData()
     fd.append('dirId', dirId)
-    fd.append('file', file)
+    fd.append('files', file)
+    fd.append('relativePaths', file.name)
     if (encrypt) {
       fd.append('encrypt', 'true')
       fd.append('privatePassword', privatePassword)
     }
+    fd.append('packMethod', packMethod || 'none')
+    fd.append('compressMethod', compressMethod || 'lz77')
+    return http.post('/user/file/upload', fd)
+  },
+
+  multiUpload(dirId, uploadFiles, encrypt, privatePassword, packMethod, compressMethod, displayName) {
+    const fd = new FormData()
+    fd.append('dirId', dirId)
+    uploadFiles.forEach(f => fd.append('files', f.raw))
+    uploadFiles.forEach(f => fd.append('relativePaths', f.relativePath))
+    if (encrypt) {
+      fd.append('encrypt', 'true')
+      fd.append('privatePassword', privatePassword)
+    }
+    fd.append('packMethod', packMethod || 'tar')
+    fd.append('compressMethod', compressMethod || 'lz77')
+    if (displayName) fd.append('displayName', displayName)
     return http.post('/user/file/upload', fd)
   },
 

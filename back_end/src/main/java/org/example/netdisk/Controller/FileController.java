@@ -15,6 +15,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
 
 @RestController
@@ -29,12 +30,16 @@ public class FileController {
     public Result<R_File> uploadFile(
             @RequestHeader("Authorization") String authHeader,
             @RequestParam("dirId") Long dirId,
-            @RequestParam("file") MultipartFile file,
+            @RequestParam("files") List<MultipartFile> files,
+            @RequestParam(value = "relativePaths", required = false) List<String> relativePaths,
             @RequestParam(value = "encrypt", defaultValue = "false") boolean encrypt,
-            @RequestParam(value = "privatePassword", required = false) String privatePassword) throws Exception {
+            @RequestParam(value = "privatePassword", required = false) String privatePassword,
+            @RequestParam(value = "packMethod", defaultValue = "none") String packMethod,
+            @RequestParam(value = "compressMethod", defaultValue = "lz77") String compressMethod,
+            @RequestParam(value = "displayName", required = false) String displayName) throws Exception {
         try {
             Long userId = Long.parseLong((String) TokenProcess.getAttributeFromToken(authHeader, "userId"));
-            R_File rFile = fileService.uploadFile(userId, dirId, file, encrypt, privatePassword);
+            R_File rFile = fileService.uploadFiles(userId, dirId, files, relativePaths, encrypt, privatePassword, packMethod, compressMethod, displayName);
             return Result.success(rFile);
         } catch (RuntimeException e) {
             return Result.error(e.getMessage());

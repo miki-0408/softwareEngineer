@@ -7,7 +7,11 @@ import java.util.List;
 
 public interface FileService {
 
-    R_File uploadFile(Long userId, Long dirId, MultipartFile file, boolean encrypt, String privatePassword);
+    R_File uploadFile(Long userId, Long dirId, MultipartFile file, boolean encrypt, String privatePassword, String packMethod, String compressMethod);
+
+    R_File uploadFiles(Long userId, Long dirId, List<MultipartFile> files, List<String> relativePaths,
+                       boolean encrypt, String privatePassword, String packMethod, String compressMethod,
+                       String displayName);
 
     byte[] downloadFile(Long userId, Long fileId, String privatePassword);
 
