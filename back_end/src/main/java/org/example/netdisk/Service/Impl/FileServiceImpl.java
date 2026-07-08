@@ -53,7 +53,6 @@ public class FileServiceImpl implements FileService {
         }
         Long targetDirId = dirId;
         int isEncryptedFlag = notEncrypted;
-        Long originalDirId = null;
 
         if (encrypt) {
             privateSpaceService.validatePrivatePassword(userId, privatePassword);
@@ -63,12 +62,10 @@ public class FileServiceImpl implements FileService {
             }
             targetDirId = privateRoot.getDirId();
             isEncryptedFlag = encrypted;
-            originalDirId = dirId;
-        } else {
-            Directory directory = directoryMapper.selectDirectoryById(dirId, userId);
-            if (directory == null) {
-                throw new RuntimeException("目录不存在");
-            }
+        }
+        Directory directory = directoryMapper.selectDirectoryById(targetDirId, userId);
+        if (directory == null) {
+            throw new RuntimeException("目录不存在");
         }
 
         try {
@@ -98,9 +95,9 @@ public class FileServiceImpl implements FileService {
             netdiskFile.setFileSize(storedSize);
             netdiskFile.setUserId(userId);
             netdiskFile.setDirId(targetDirId);
-            netdiskFile.setOriginalDirId(originalDirId);
             netdiskFile.setStatus(fileStatusNormal);
             netdiskFile.setIsEncrypted(isEncryptedFlag);
+            netdiskFile.setCompressMethod((int) compressCode(compressMethod));
             fileMapper.insertFile(netdiskFile);
 
             String path = fileStorageService.saveCompressedFile(processed, userId, netdiskFile.getFileId());
@@ -125,7 +122,6 @@ public class FileServiceImpl implements FileService {
         }
         Long targetDirId = dirId;
         int isEncryptedFlag = notEncrypted;
-        Long originalDirId = null;
 
         if (encrypt) {
             privateSpaceService.validatePrivatePassword(userId, privatePassword);
@@ -135,12 +131,10 @@ public class FileServiceImpl implements FileService {
             }
             targetDirId = privateRoot.getDirId();
             isEncryptedFlag = encrypted;
-            originalDirId = dirId;
-        } else {
-            Directory directory = directoryMapper.selectDirectoryById(dirId, userId);
-            if (directory == null) {
-                throw new RuntimeException("目录不存在");
-            }
+        }
+        Directory directory = directoryMapper.selectDirectoryById(targetDirId, userId);
+        if (directory == null) {
+            throw new RuntimeException("目录不存在");
         }
 
         try {
@@ -198,9 +192,9 @@ public class FileServiceImpl implements FileService {
             netdiskFile.setFileSize(storedSize);
             netdiskFile.setUserId(userId);
             netdiskFile.setDirId(targetDirId);
-            netdiskFile.setOriginalDirId(originalDirId);
             netdiskFile.setStatus(fileStatusNormal);
             netdiskFile.setIsEncrypted(isEncryptedFlag);
+            netdiskFile.setCompressMethod((int) compressCode(compressMethod));
             fileMapper.insertFile(netdiskFile);
 
             String path = fileStorageService.saveCompressedFile(processed, userId, netdiskFile.getFileId());
@@ -224,53 +218,21 @@ public class FileServiceImpl implements FileService {
         }
         byte[] storedBytes = fileStorageService.readStoredFile(netdiskFile.getPath());
         return processDownload(storedBytes,
-            netdiskFile.getIsEncrypted() == encrypted ? privatePassword : null);
+            netdiskFile.getIsEncrypted() == encrypted ? privatePassword : null,
+            netdiskFile.getCompressMethod());
     }
 
     // ==================== 处理流水线 ====================
 
-    private static final byte[] MAGIC = { 'N', 'D', 'K', 'K' };
-    private static final byte PACK_NONE = 0, PACK_TAR = 1;
     private static final byte COMP_LZ77 = 1, COMP_HUFFMAN = 2;
 
-    /** 解压 → 解密（用于读取私密空间文件，与 encryptFile 的 加密→压缩 对应） */
-    private byte[] decompressThenDecrypt(byte[] data, byte compCode, String password) {
-        byte[] body;
-        boolean hasHeader = data.length >= 6 && data[0] == MAGIC[0] && data[1] == MAGIC[1]
-            && data[2] == MAGIC[2] && data[3] == MAGIC[3];
-        if (hasHeader) {
-            body = new byte[data.length - 6];
-            System.arraycopy(data, 6, body, 0, body.length);
-        } else {
-            body = data;
-            compCode = COMP_LZ77;
-        }
-        if (compCode == COMP_HUFFMAN) body = HuffmanCompression.decompress(body);
-        else body = LZ77Compression.decompress(body);
-        if (password != null) body = EncryptionUtil.decrypt(body, password);
-        return body;
+    private byte compressCode(String method) {
+        return "huffman".equals(method) ? COMP_HUFFMAN : COMP_LZ77;
     }
 
-    /** 加密 → 压缩 → 加头（用于移入私密空间，解密时对应 decompressThenDecrypt） */
-    private byte[] encryptThenCompress(byte[] data, byte compCode, String password) {
-        if (password != null) data = EncryptionUtil.encrypt(data, password);
-        if (compCode == COMP_HUFFMAN) data = HuffmanCompression.compress(data);
-        else data = LZ77Compression.compress(data);
-        byte[] result = new byte[6 + data.length];
-        System.arraycopy(MAGIC, 0, result, 0, 4);
-        result[4] = PACK_NONE;
-        result[5] = compCode;
-        System.arraycopy(data, 0, result, 6, data.length);
-        return result;
-    }
-
-    /** 上传管道: 打包 → 压缩 → 加密 → 加头 */
+    /** 打包 → 压缩 → 加密 */
     private byte[] processUpload(byte[] raw, String packMethod, String compressMethod, String password) {
-        byte packCode = "tar".equals(packMethod) ? PACK_TAR : PACK_NONE;
-        byte compCode = "huffman".equals(compressMethod) ? COMP_HUFFMAN : COMP_LZ77;
-
-        // 1. 打包
-        if (packCode == PACK_TAR) {
+        if ("tar".equals(packMethod)) {
             try {
                 TarUtil.TarEntry entry = new TarUtil.TarEntry("file", raw, false);
                 raw = TarUtil.createTar(List.of(entry));
@@ -278,60 +240,19 @@ public class FileServiceImpl implements FileService {
                 throw new RuntimeException("打包失败", e);
             }
         }
+        if ("huffman".equals(compressMethod)) raw = HuffmanCompression.compress(raw);
+        else raw = LZ77Compression.compress(raw);
 
-        // 2. 压缩
-        if (compCode == COMP_HUFFMAN) {
-            raw = HuffmanCompression.compress(raw);
-        } else {
-            raw = LZ77Compression.compress(raw);
-        }
-
-        // 3. 加密
-        if (password != null) {
-            raw = EncryptionUtil.encrypt(raw, password);
-        }
-
-        // 4. 加头
-        byte[] result = new byte[6 + raw.length];
-        System.arraycopy(MAGIC, 0, result, 0, 4);
-        result[4] = packCode;
-        result[5] = compCode;
-        System.arraycopy(raw, 0, result, 6, raw.length);
-        return result;
+        if (password != null) raw = EncryptionUtil.encrypt(raw, password);
+        return raw;
     }
 
-    /** 下载管道: 去头 → 解密 → 解压 → 解包 */
-    private byte[] processDownload(byte[] data, String password) {
-        // 0. 兼容旧文件（无 "NDKK" 头）
-        boolean legacy = data.length < 6
-            || data[0] != MAGIC[0] || data[1] != MAGIC[1]
-            || data[2] != MAGIC[2] || data[3] != MAGIC[3];
+    /** 解密 → 解压 */
+    private byte[] processDownload(byte[] data, String password, Integer compressMethod) {
+        if (password != null) data = EncryptionUtil.decrypt(data, password);
 
-        byte packCode = PACK_NONE;
-        byte compCode = COMP_LZ77;  // 旧文件默认 LZ77
-
-        if (!legacy) {
-            packCode = data[4];
-            compCode = data[5];
-            byte[] stripped = new byte[data.length - 6];
-            System.arraycopy(data, 6, stripped, 0, stripped.length);
-            data = stripped;
-        }
-
-        // 1. 解密
-        if (password != null) {
-            data = EncryptionUtil.decrypt(data, password);
-        }
-
-        // 2. 解压
-        if (compCode == COMP_HUFFMAN) {
-            data = HuffmanCompression.decompress(data);
-        } else {
-            data = LZ77Compression.decompress(data);
-        }
-
-        // 3. 不解包：tar 文件直接返回，用户自行用工具解包
-        return data;
+        byte comp = (compressMethod != null) ? compressMethod.byteValue() : COMP_LZ77;
+        return (comp == COMP_HUFFMAN) ? HuffmanCompression.decompress(data) : LZ77Compression.decompress(data);
     }
 
     // ==================== 普通文件列表（自动排除已加密文件） ====================
@@ -420,73 +341,48 @@ public class FileServiceImpl implements FileService {
     // ==================== 移入私密空间（加密 + 移动到私密根目录） ====================
 
     @Override
-    public boolean encryptFile(Long userId, Long fileId, String privatePassword) {
+    public boolean encryptFile(Long userId, Long fileId, String privatePassword, Long targetDirId) {
         NetdiskFile netdiskFile = fileMapper.selectFileById(fileId, userId);
-        if (netdiskFile == null || netdiskFile.getStatus() != fileStatusNormal) {
-            return false;
-        }
-        if (netdiskFile.getIsEncrypted() == encrypted) {
-            return true;
-        }
+        if (netdiskFile == null || netdiskFile.getStatus() != fileStatusNormal) return false;
+        if (netdiskFile.getIsEncrypted() == encrypted) return true;
         privateSpaceService.validatePrivatePassword(userId, privatePassword);
-        Directory privateRoot = privateSpaceService.findPrivateSpaceRoot(userId);
-        if (privateRoot == null) {
-            throw new RuntimeException("私密空间根目录不存在");
-        }
 
         byte[] storedBytes = fileStorageService.readStoredFile(netdiskFile.getPath());
-        // processDownload 解压得到原文 → processUpload 加密+压缩（统一外层加密格式）
-        byte[] rawBytes = processDownload(storedBytes, null);
+        byte[] rawBytes = processDownload(storedBytes, null, netdiskFile.getCompressMethod());
         byte[] newStoredBytes = processUpload(rawBytes, "none", "lz77", privatePassword);
+        netdiskFile.setCompressMethod((int) COMP_LZ77);
         fileStorageService.deleteStoredFile(netdiskFile.getPath());
         String newPath = fileStorageService.saveCompressedFile(newStoredBytes, userId, netdiskFile.getFileId());
-
         adjustStorageOnSizeChange(userId, netdiskFile.getFileSize(), newStoredBytes.length);
 
         netdiskFile.setPath(newPath);
         netdiskFile.setFileSize((long) newStoredBytes.length);
-        netdiskFile.setOriginalDirId(netdiskFile.getDirId());  // 记住来源目录
-        netdiskFile.setDirId(privateRoot.getDirId());          // 移到私密空间
+        netdiskFile.setDirId(targetDirId);
         netdiskFile.setIsEncrypted(encrypted);
         return fileMapper.updateFile(netdiskFile) > 0;
     }
 
-    // ==================== 移出私密空间（解密 + 恢复到原目录） ====================
+    // ==================== 移出私密空间 ====================
 
     @Override
-    public boolean decryptFile(Long userId, Long fileId, String privatePassword) {
+    public boolean decryptFile(Long userId, Long fileId, String privatePassword, Long targetDirId) {
         NetdiskFile netdiskFile = fileMapper.selectFileById(fileId, userId);
-        if (netdiskFile == null || netdiskFile.getStatus() != fileStatusNormal) {
-            return false;
-        }
-        if (netdiskFile.getIsEncrypted() != encrypted) {
-            return true;
-        }
+        if (netdiskFile == null || netdiskFile.getStatus() != fileStatusNormal) return false;
+        if (netdiskFile.getIsEncrypted() != encrypted) return true;
         privateSpaceService.validatePrivatePassword(userId, privatePassword);
 
         byte[] storedBytes = fileStorageService.readStoredFile(netdiskFile.getPath());
-        byte[] rawBytes = processDownload(storedBytes, privatePassword);
+        byte[] rawBytes = processDownload(storedBytes, privatePassword, netdiskFile.getCompressMethod());
         byte[] newStoredBytes = processUpload(rawBytes, "none", "lz77", null);
+        netdiskFile.setCompressMethod((int) COMP_LZ77);
         fileStorageService.deleteStoredFile(netdiskFile.getPath());
         String newPath = fileStorageService.saveCompressedFile(newStoredBytes, userId, netdiskFile.getFileId());
-
         adjustStorageOnSizeChange(userId, netdiskFile.getFileSize(), newStoredBytes.length);
 
         netdiskFile.setPath(newPath);
         netdiskFile.setFileSize((long) newStoredBytes.length);
-
-        // 恢复目标目录：优先用原始目录；如果已删除/为空/属于私密空间内部 → 恢复到"我的文件"
-        Long originalDir = netdiskFile.getOriginalDirId();
-        Directory privateRoot = privateSpaceService.findPrivateSpaceRoot(userId);
-        Directory targetDir = (originalDir != null) ? directoryMapper.selectDirectoryById(originalDir, userId) : null;
-        if (targetDir == null || (privateRoot != null && originalDir.equals(privateRoot.getDirId()))) {
-            // 原始目录已被删除 / 从私密空间直接上传的文件 → 恢复到用户根目录
-            Directory userRoot = directoryMapper.selectRootDirectory(userId);
-            originalDir = userRoot != null ? userRoot.getDirId() : null;
-        }
-        netdiskFile.setFileName(uniqueFileName(userId, originalDir, netdiskFile.getFileName()));
-        netdiskFile.setDirId(originalDir);
-        netdiskFile.setOriginalDirId(null);
+        netdiskFile.setFileName(uniqueFileName(userId, targetDirId, netdiskFile.getFileName()));
+        netdiskFile.setDirId(targetDirId);
         netdiskFile.setIsEncrypted(notEncrypted);
         return fileMapper.updateFile(netdiskFile) > 0;
     }
@@ -533,6 +429,21 @@ public class FileServiceImpl implements FileService {
             n++;
         }
         return candidate;
+    }
+
+    /** 检查 dirId 是否是 ancestorDirId 的后代（含自身） */
+    private boolean isUnderDir(Long userId, Long dirId, Long ancestorDirId) {
+        if (dirId == null || ancestorDirId == null) return false;
+        if (dirId.equals(ancestorDirId)) return true;
+        Long current = dirId;
+        for (int i = 0; i < 20; i++) { // 最多向上查 20 层
+            Directory d = directoryMapper.selectDirectoryById(current, userId);
+            if (d == null) return false;
+            if (d.getParentDirId() == null) return false;
+            if (d.getParentDirId().equals(ancestorDirId)) return true;
+            current = d.getParentDirId();
+        }
+        return false;
     }
 
     private String extractFileType(String fileName) {

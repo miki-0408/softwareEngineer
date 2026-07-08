@@ -218,74 +218,14 @@
     </el-dialog>
 
     <!-- 上传文件 -->
-    <el-dialog v-model="uploadVisible" title="上传文件" width="520px" @closed="clearUploadFiles">
-      <div class="dialog-body-padded">
-        <el-form label-position="top">
-          <el-form-item label="上传到">
-            <el-tag type="info">{{ currentBreadcrumbPath }}</el-tag>
-          </el-form-item>
-          <el-form-item label="选择文件或文件夹">
-            <div class="flex-center gap-8" style="margin-bottom:8px">
-              <input ref="fileInputRef" type="file" multiple style="display:none"
-                @change="onFileInputChange" />
-              <input ref="folderInputRef" type="file" webkitdirectory style="display:none"
-                @change="onFolderInputChange" />
-              <el-button @click="fileInputRef.click()">
-                <el-icon><Document /></el-icon> 选择文件
-              </el-button>
-              <el-button @click="folderInputRef.click()">
-                <el-icon><Folder /></el-icon> 选择文件夹
-              </el-button>
-            </div>
-            <div v-if="uploadFiles.length > 0"
-              style="max-height:200px;overflow-y:auto;border:1px solid #e4e7ed;border-radius:6px;padding:8px">
-              <div v-for="(f, i) in uploadFiles" :key="i"
-                class="flex-between" style="padding:4px 0;border-bottom:1px solid #f0f0f0">
-                <span style="font-size:13px">{{ f.relativePath || f.name }}</span>
-                <span class="text-muted" style="font-size:12px">{{ formatUploadSize(f.size) }}</span>
-                <el-button size="small" text type="danger" @click="removeUploadFile(i)">
-                  <el-icon><Close /></el-icon>
-                </el-button>
-              </div>
-            </div>
-            <div v-else style="padding:24px;text-align:center;border:1px dashed #d9d9d9;border-radius:6px;color:#c0c4cc">
-              请选择文件或文件夹
-            </div>
-          </el-form-item>
-          <el-row :gutter="12">
-            <el-col :span="12">
-              <el-form-item label="打包方式">
-                <el-select v-model="uploadPackMethod" style="width:100%" @change="onPackMethodChange">
-                  <el-option label="不打包" value="none" />
-                  <el-option label="tar 归档" value="tar" />
-                </el-select>
-              </el-form-item>
-            </el-col>
-            <el-col :span="12">
-              <el-form-item label="压缩算法">
-                <el-select v-model="uploadCompressMethod" style="width:100%">
-                  <el-option label="LZ77" value="lz77" />
-                  <el-option label="Huffman" value="huffman" />
-                </el-select>
-              </el-form-item>
-            </el-col>
-          </el-row>
-          <el-form-item v-if="uploadPackMethod === 'tar'" label="归档文件名">
-            <el-input v-model="uploadTarName" placeholder="默认：第一个文件名.tar" maxlength="200" />
-          </el-form-item>
-          <el-form-item>
-            <el-checkbox v-model="uploadEncrypt">
-              加密上传（移入私密空间，需已设置私密密码）
-            </el-checkbox>
-          </el-form-item>
-        </el-form>
-      </div>
-      <template #footer>
-        <el-button @click="uploadVisible = false">取消</el-button>
-        <el-button type="primary" :loading="uploadLoading" :disabled="uploadFiles.length === 0"
-          @click="doUpload">上传（{{ uploadFiles.length }} 个）</el-button>
-      </template>
-    </el-dialog>
+    <UploadDialog v-model="uploadVisible" :target-path="currentBreadcrumbPath" show-encrypt
+      :submit-text="'上传'"
+      @confirm="onUploadConfirm" />
+
+    <!-- 选择私密空间目标目录 -->
+    <DirPickerDialog v-model="encryptPickerVisible" title="移入私密空间 - 选择目标目录"
+      :build-tree="buildPrivateDirTree"
+      @confirm="onEncryptTargetSelected" />
 
     <!-- 移动文件 -->
     <el-dialog v-model="moveVisible" :title="_batchMoveItems.length > 0 ? `批量移动 ${_batchMoveItems.length} 项` : '移动到...'" width="500px">
@@ -370,6 +310,7 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted, nextTick } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   HomeFilled, FolderAdd, Upload, Refresh, Folder, Document,
@@ -377,9 +318,14 @@ import {
 } from '@element-plus/icons-vue'
 import { directoryAPI, fileAPI } from '../api'
 import { useUserStore } from '../stores/user'
+import { useTransferStore } from '../stores/transfer'
+import UploadDialog from '../components/UploadDialog.vue'
+import DirPickerDialog from '../components/DirPickerDialog.vue'
 import Sidebar from '../components/Sidebar.vue'
 
+const router = useRouter()
 const userStore = useUserStore()
+const transferStore = useTransferStore()
 
 // ==================== 目录导航（手动面包屑栈） ====================
 const currentDirId = ref(null)
@@ -394,6 +340,7 @@ const currentBreadcrumbPath = computed(() => {
 async function navigateToDir(dirId, dirName) {
   currentDirId.value = dirId
   breadcrumb.value.push({ dirId: String(dirId), dirName })
+  directories.value = []; files.value = []; loading.value = true
   await loadDirectories(dirId)
   await loadFiles(dirId)
 }
@@ -403,6 +350,7 @@ async function navigateToBreadcrumb(index) {
   const target = breadcrumb.value[index]
   breadcrumb.value = breadcrumb.value.slice(0, index + 1)
   currentDirId.value = Number(target.dirId)
+  directories.value = []; files.value = []; loading.value = true
   await loadDirectories(Number(target.dirId))
   await loadFiles(Number(target.dirId))
 }
@@ -553,30 +501,10 @@ async function batchEncrypt() {
   if (selectedItems.value.length === 0) return
   const filesToEncrypt = selectedItems.value.filter(i => !i.isDir)
   if (filesToEncrypt.length === 0) {
-    ElMessage.warning('请至少选择一个文件（文件夹不能移入私密空间）')
+    ElMessage.warning('请至少选择一个文件')
     return
   }
-  let pwd = userStore.privatePassword
-  if (!pwd) {
-    pwd = await requestPrivatePassword()
-    if (!pwd) return
-    userStore.setPrivatePassword(pwd)
-  }
-  try {
-    await ElMessageBox.confirm(
-      `确定将 ${filesToEncrypt.length} 个文件移入私密空间吗？`,
-      '批量移入私密空间', { confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning' }
-    )
-  } catch { return }
-  let ok = 0
-  for (const item of filesToEncrypt) {
-    try {
-      await fileAPI.encrypt(item.id, pwd)
-      ok++
-    } catch { /* skip */ }
-  }
-  ElMessage.success(`成功移入 ${ok} 个文件`)
-  await refreshCurrentDir()
+  openEncryptPicker(filesToEncrypt)
 }
 
 async function loadDirectories(parentId) {
@@ -705,158 +633,82 @@ async function doRenameFile() {
   finally { renameFileLoading.value = false }
 }
 
-// 上传（支持多文件/文件夹）
 const uploadVisible = ref(false)
-const uploadFiles = ref([])  // [{ name, size, relativePath, raw: File }]
-const uploadEncrypt = ref(false)
-const uploadTarName = ref('')
-const uploadPackMethod = ref('none')
-const uploadCompressMethod = ref('lz77')
-const uploadLoading = ref(false)
-const fileInputRef = ref(null)
-const folderInputRef = ref(null)
 
 function openUpload() {
-  uploadFiles.value = []
-  uploadEncrypt.value = false
-  uploadTarName.value = ''
-  uploadPackMethod.value = 'none'
-  uploadCompressMethod.value = 'lz77'
   uploadVisible.value = true
 }
 
-function onPackMethodChange(val) {
-  if (val === 'tar' && uploadFiles.value.length > 0) {
-    const first = uploadFiles.value[0].name.replace(/\.[^.]+$/, '')
-    uploadTarName.value = first + '.tar'
-  }
-}
-
-function ensureTarSuffix(name) {
-  return name.endsWith('.tar') ? name : name + '.tar'
-}
-
-function clearUploadFiles() {
-  uploadFiles.value = []
-  if (fileInputRef.value) fileInputRef.value.value = ''
-  if (folderInputRef.value) folderInputRef.value.value = ''
-}
-
-function onFileInputChange(e) {
-  for (const f of e.target.files) {
-    uploadFiles.value.push({ name: f.name, size: f.size, relativePath: f.webkitRelativePath || f.name, raw: f })
-  }
-  e.target.value = ''
-}
-
-function onFolderInputChange(e) {
-  for (const f of e.target.files) {
-    uploadFiles.value.push({ name: f.name, size: f.size, relativePath: f.webkitRelativePath, raw: f })
-  }
-  e.target.value = ''
-}
-
-function removeUploadFile(index) {
-  uploadFiles.value.splice(index, 1)
-}
-
-function formatUploadSize(bytes) {
-  if (bytes < 1024) return bytes + ' B'
-  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB'
-  return (bytes / 1048576).toFixed(1) + ' MB'
-}
-
-async function doUpload() {
-  if (uploadFiles.value.length === 0) return
-  if (uploadEncrypt.value && !userStore.privateSpaceEnabled) {
-    ElMessage.warning('私密空间未开启，无法加密上传。请在私密空间页面先设置私密密码')
+async function onUploadConfirm({ files, packMethod, compressMethod, tarName, encrypt }) {
+  if (files.length === 0) return
+  if (encrypt && !userStore.privateSpaceEnabled) {
+    ElMessage.warning('私密空间未开启，无法加密上传。')
     return
   }
-  uploadLoading.value = true
-  try {
-    let pwd = undefined
-    if (uploadEncrypt.value) {
-      pwd = userStore.privatePassword || await requestPrivatePassword()
-      if (!pwd) { uploadLoading.value = false; return }
-      if (!userStore.privatePassword) userStore.setPrivatePassword(pwd)
-    }
+  const pwd = encrypt ? (userStore.privatePassword || await requestPrivatePassword()) : undefined
+  if (encrypt && !pwd) return
+  if (encrypt && !userStore.privatePassword) userStore.setPrivatePassword(pwd)
 
-    if (uploadPackMethod.value === 'none') {
-      // 检测共同文件夹前缀，自动创建同名文件夹
+  try {
+    if (packMethod === 'none') {
       let targetDirId = currentDirId.value
-      const firstRp = uploadFiles.value[0].relativePath
+      const firstRp = files[0].relativePath
       if (firstRp && firstRp.includes('/')) {
-        const folderName = firstRp.split('/')[0]
         try {
-          const res = await directoryAPI.create(folderName, currentDirId.value)
+          const res = await directoryAPI.create(firstRp.split('/')[0], currentDirId.value)
           targetDirId = Number(res.data.data.dirId)
-        } catch { /* 目录可能已存在，沿用当前目录 */ }
-      }
-      // 逐个上传，强制只用文件基名
-      let ok = 0
-      for (const f of uploadFiles.value) {
-        try {
-          const cleanFile = new File([f.raw], f.name, { type: f.raw.type || 'application/octet-stream' })
-          await fileAPI.upload(targetDirId, cleanFile, uploadEncrypt.value, pwd, 'none', uploadCompressMethod.value)
-          ok++
         } catch { /* skip */ }
       }
-      ElMessage.success(`成功上传 ${ok} 个文件`)
+      const token = localStorage.getItem('token')
+      const base = import.meta.env.PROD ? '' : '/api'
+      for (const f of files) {
+        const fd = new FormData()
+        fd.append('dirId', targetDirId)
+        fd.append('files', new File([f.raw], f.name, { type: f.raw.type || 'application/octet-stream' }))
+        fd.append('relativePaths', f.name)
+        if (encrypt) { fd.append('encrypt', 'true'); fd.append('privatePassword', pwd) }
+        fd.append('packMethod', 'none')
+        fd.append('compressMethod', compressMethod)
+        transferStore.addUpload(f.name, f.size, () => {
+          const xhr = new XMLHttpRequest()
+          xhr.open('POST', base + '/user/file/upload')
+          if (token) xhr.setRequestHeader('Authorization', 'Bearer ' + token)
+          return { xhr, body: fd }
+        })
+      }
     } else {
-      // tar 归档上传
-      const tarName = uploadTarName.value ||
-        (uploadFiles.value[0].name.replace(/\.[^.]+$/, '') + '.tar')
-      // 构造一个带指定名称的 File 列表传给后端
-      await fileAPI.multiUpload(currentDirId.value, uploadFiles.value, uploadEncrypt.value, pwd,
-        'tar', uploadCompressMethod.value,
-        uploadTarName.value ? ensureTarSuffix(uploadTarName.value) : undefined)
-      ElMessage.success('上传成功')
+      const finalName = tarName || (files[0].name.replace(/\.[^.]+$/, '') + '.tar')
+      const fd = new FormData()
+      fd.append('dirId', currentDirId.value)
+      files.forEach(f => fd.append('files', f.raw))
+      files.forEach(f => fd.append('relativePaths', f.relativePath || f.name))
+      if (encrypt) { fd.append('encrypt', 'true'); fd.append('privatePassword', pwd) }
+      fd.append('packMethod', 'tar')
+      fd.append('compressMethod', compressMethod)
+      fd.append('displayName', finalName)
+      const token = localStorage.getItem('token')
+      const base = import.meta.env.PROD ? '' : '/api'
+      transferStore.addUpload(finalName, files.reduce((s, f) => s + f.size, 0), () => {
+        const xhr = new XMLHttpRequest()
+        xhr.open('POST', base + '/user/file/upload')
+        if (token) xhr.setRequestHeader('Authorization', 'Bearer ' + token)
+        return { xhr, body: fd }
+      })
     }
     uploadVisible.value = false
-    await refreshCurrentDir()
+    ElMessage.success('已加入传输队列')
   } catch { /* ignore */ }
-  finally { uploadLoading.value = false }
 }
 
 // 下载
 async function downloadFile(file) {
-  try {
-    let pwd = undefined
-    if (file.isEncrypted === 1) {
-      pwd = userStore.privatePassword || await requestPrivatePassword()
-      if (!pwd) return
-    }
-    const res = await fileAPI.download(file.fileId, pwd)
-    const blob = new Blob([res.data])
-
-    // 尝试使用 showSaveFilePicker 选择保存路径，不支持则回退到浏览器默认下载
-    if (window.showSaveFilePicker) {
-      try {
-        const handle = await window.showSaveFilePicker({
-          suggestedName: file.fileName,
-          types: [{ description: '文件', accept: { 'application/octet-stream': ['.' + (file.fileType || 'dat')] } }]
-        })
-        const writable = await handle.createWritable()
-        await writable.write(blob)
-        await writable.close()
-        ElMessage.success('文件已保存')
-        return
-      } catch (e) {
-        if (e.name === 'AbortError') return  // 用户点击取消，不做任何事
-      }
-    }
-
-    // 回退：浏览器默认下载
-    const url = window.URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = file.fileName
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    window.URL.revokeObjectURL(url)
-    ElMessage.success('下载开始')
-  } catch { /* ignore */ }
+  let pwd = undefined
+  if (file.isEncrypted === 1) {
+    pwd = userStore.privatePassword || await requestPrivatePassword()
+    if (!pwd) return
+  }
+  const ok = await transferStore.addDownloadWithPicker(file.fileName, file.fileSize, file.fileId, pwd)
+  if (ok) ElMessage.success('已加入传输队列')
 }
 
 // 移动
@@ -918,18 +770,62 @@ function handleFileAction(cmd, file) {
 }
 
 // 加密 / 解密
-async function encryptFileAction(file) {
+// 移入私密空间：选择目标目录
+const encryptPickerVisible = ref(false)
+let _encryptTarget = null  // 待加密的文件（单个或数组）
+
+function openEncryptPicker(target) {
+  _encryptTarget = target
+  encryptPickerVisible.value = true
+}
+
+async function buildPrivateDirTree(parentId) {
+  const res = await directoryAPI.list(parentId)
+  const dirs = (res.data.data || []).filter(d => d.dirName === '私密空间')
+  const tree = []
+  for (const d of dirs) {
+    const children = await buildPrivateDirTreeRecursive(d.dirId)
+    tree.push({ dirId: Number(d.dirId), dirName: d.dirName, children })
+  }
+  return tree
+}
+
+async function buildPrivateDirTreeRecursive(parentId) {
+  const res = await directoryAPI.list(parentId)
+  const tree = []
+  for (const d of (res.data.data || [])) {
+    tree.push({
+      dirId: Number(d.dirId), dirName: d.dirName,
+      children: await buildPrivateDirTreeRecursive(d.dirId)
+    })
+  }
+  return tree
+}
+
+async function onEncryptTargetSelected(targetDirId) {
   let pwd = userStore.privatePassword
   if (!pwd) {
     pwd = await requestPrivatePassword()
     if (!pwd) return
     userStore.setPrivatePassword(pwd)
   }
-  try {
-    await fileAPI.encrypt(file.fileId, pwd)
-    ElMessage.success('已移入私密空间')
-    await refreshCurrentDir()
-  } catch { /* ignore */ }
+  const targets = Array.isArray(_encryptTarget) ? _encryptTarget
+    : (_encryptTarget ? [_encryptTarget] : [])
+  let ok = 0
+  for (const item of targets) {
+    try {
+      await fileAPI.encrypt(item.id || item.fileId, pwd, targetDirId)
+      ok++
+    } catch { /* skip */ }
+  }
+  ElMessage.success(`成功移入 ${ok} 个文件`)
+  _encryptTarget = null
+  await refreshCurrentDir()
+}
+
+// 加密/解密入口
+async function encryptFileAction(file) {
+  openEncryptPicker([file])
 }
 
 async function decryptFileAction(file) {
@@ -940,7 +836,7 @@ async function decryptFileAction(file) {
     userStore.setPrivatePassword(pwd)
   }
   try {
-    await fileAPI.decrypt(file.fileId, pwd)
+    await fileAPI.decrypt(file.fileId, pwd, userStore.privateSpaceRootDirId)
     ElMessage.success('已移出私密空间')
     await refreshCurrentDir()
   } catch { /* ignore */ }

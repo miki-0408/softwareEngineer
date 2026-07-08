@@ -9,13 +9,13 @@ import java.util.List;
 public interface FileMapper {
 
     @Insert("""
-            INSERT INTO file (fileName, fileType, fileSize, path, userId, dirId, originalDirId, status, isEncrypted)
-            VALUES (#{fileName}, #{fileType}, #{fileSize}, #{path}, #{userId}, #{dirId}, #{originalDirId}, #{status}, #{isEncrypted})
+            INSERT INTO file (fileName, fileType, fileSize, path, userId, dirId, status, isEncrypted, compressMethod)
+            VALUES (#{fileName}, #{fileType}, #{fileSize}, #{path}, #{userId}, #{dirId}, #{status}, #{isEncrypted}, #{compressMethod})
             """)
     @Options(useGeneratedKeys = true, keyProperty = "fileId")
     void insertFile(NetdiskFile file);
 
-    @Update("UPDATE file SET fileName=#{fileName}, fileType=#{fileType}, fileSize=#{fileSize}, path=#{path}, dirId=#{dirId}, originalDirId=#{originalDirId}, status=#{status}, isEncrypted=#{isEncrypted} WHERE fileId=#{fileId} AND userId=#{userId}")
+    @Update("UPDATE file SET fileName=#{fileName}, fileType=#{fileType}, fileSize=#{fileSize}, path=#{path}, dirId=#{dirId}, status=#{status}, isEncrypted=#{isEncrypted}, compressMethod=#{compressMethod} WHERE fileId=#{fileId} AND userId=#{userId}")
     int updateFile(NetdiskFile file);
 
     @Update("UPDATE file SET status=#{status} WHERE fileId=#{fileId} AND userId=#{userId}")

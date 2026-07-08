@@ -23,7 +23,7 @@ public interface FileService {
 
     boolean moveToRecycleBin(Long userId, Long fileId);
 
-    boolean encryptFile(Long userId, Long fileId, String privatePassword);
+    boolean encryptFile(Long userId, Long fileId, String privatePassword, Long targetDirId);
 
-    boolean decryptFile(Long userId, Long fileId, String privatePassword);
+    boolean decryptFile(Long userId, Long fileId, String privatePassword, Long targetDirId);
 }

@@ -119,10 +119,11 @@ public class FileController {
     public Result<String> encryptFile(
             @RequestHeader("Authorization") String authHeader,
             @RequestParam("fileId") Long fileId,
-            @RequestParam("privatePassword") String privatePassword) throws Exception {
+            @RequestParam("privatePassword") String privatePassword,
+            @RequestParam("targetDirId") Long targetDirId) throws Exception {
         try {
             Long userId = Long.parseLong((String) TokenProcess.getAttributeFromToken(authHeader, "userId"));
-            boolean ok = fileService.encryptFile(userId, fileId, privatePassword);
+            boolean ok = fileService.encryptFile(userId, fileId, privatePassword, targetDirId);
             if (ok) {
                 return Result.success("文件加密成功");
             }
@@ -136,10 +137,11 @@ public class FileController {
     public Result<String> decryptFile(
             @RequestHeader("Authorization") String authHeader,
             @RequestParam("fileId") Long fileId,
-            @RequestParam("privatePassword") String privatePassword) throws Exception {
+            @RequestParam("privatePassword") String privatePassword,
+            @RequestParam("targetDirId") Long targetDirId) throws Exception {
         try {
             Long userId = Long.parseLong((String) TokenProcess.getAttributeFromToken(authHeader, "userId"));
-            boolean ok = fileService.decryptFile(userId, fileId, privatePassword);
+            boolean ok = fileService.decryptFile(userId, fileId, privatePassword, targetDirId);
             if (ok) {
                 return Result.success("文件已解除加密");
             }

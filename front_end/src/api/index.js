@@ -190,17 +190,19 @@ export const fileAPI = {
     return http.post('/user/file/delete', params)
   },
 
-  encrypt(fileId, privatePassword) {
+  encrypt(fileId, privatePassword, targetDirId) {
     const params = new URLSearchParams()
     params.append('fileId', fileId)
     params.append('privatePassword', privatePassword)
+    params.append('targetDirId', targetDirId)
     return http.post('/user/file/encrypt', params)
   },
 
-  decrypt(fileId, privatePassword) {
+  decrypt(fileId, privatePassword, targetDirId) {
     const params = new URLSearchParams()
     params.append('fileId', fileId)
     params.append('privatePassword', privatePassword)
+    params.append('targetDirId', targetDirId)
     return http.post('/user/file/decrypt', params)
   }
 }

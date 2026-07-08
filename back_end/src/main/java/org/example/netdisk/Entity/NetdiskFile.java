@@ -17,4 +17,5 @@ public class NetdiskFile {
     private Long originalDirId;
     private Integer status;
     private Integer isEncrypted;
+    private Integer compressMethod;
 }

@@ -26,6 +26,12 @@ const routes = [
     meta: { title: '私密空间', requiresAuth: true }
   },
   {
+    path: '/transfer',
+    name: 'Transfer',
+    component: () => import('../views/TransferView.vue'),
+    meta: { title: '传输', requiresAuth: true }
+  },
+  {
     path: '/admin',
     name: 'Admin',
     component: () => import('../views/AdminView.vue'),

@@ -189,6 +189,27 @@ a {
   font-size: 11px;
 }
 
+.transfer-badge {
+  margin-left: auto;
+  margin-right: 8px;
+  background: var(--primary);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  min-width: 18px;
+  height: 18px;
+  line-height: 18px;
+  text-align: center;
+  border-radius: 9px;
+  padding: 0 5px;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
 /* 私密空间已开启：菜单高亮 */
 .sidebar-nav .el-menu-item.ps-active {
   background: rgba(103, 194, 58, 0.1) !important;

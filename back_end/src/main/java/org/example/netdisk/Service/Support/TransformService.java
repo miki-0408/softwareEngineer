@@ -48,6 +48,7 @@ public class TransformService {
         rFile.setOriginalDirId(file.getOriginalDirId() == null ? null : String.valueOf(file.getOriginalDirId()));
         rFile.setStatus(file.getStatus());
         rFile.setIsEncrypted(file.getIsEncrypted());
+        rFile.setCompressMethod(file.getCompressMethod());
         return rFile;
     }
 

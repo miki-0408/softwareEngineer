@@ -15,4 +15,5 @@ public class R_File {
     private String originalDirId;
     private Integer status;
     private Integer isEncrypted;
+    private Integer compressMethod;
 }

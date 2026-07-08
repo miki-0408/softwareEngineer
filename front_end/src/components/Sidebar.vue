@@ -25,6 +25,12 @@
             <span>回收站</span>
           </el-menu-item>
 
+          <el-menu-item index="transfer" :route="{ path: '/transfer' }">
+            <el-icon><Connection /></el-icon>
+            <span>传输</span>
+            <span v-if="transferStore.running > 0" class="transfer-badge">{{ transferStore.running }}</span>
+          </el-menu-item>
+
           <el-menu-item index="private" :route="{ path: '/private' }"
             :class="{ 'ps-active': userStore.privateSpaceEnabled }">
             <el-icon><Lock /></el-icon>
@@ -67,9 +73,11 @@
 <script setup>
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { Cloudy, FolderOpened, Delete, Lock, Setting, SwitchButton, CircleCheckFilled } from '@element-plus/icons-vue'
+import { Cloudy, FolderOpened, Delete, Lock, Setting, SwitchButton, CircleCheckFilled, Connection } from '@element-plus/icons-vue'
 import { useUserStore } from '../stores/user'
+import { useTransferStore } from '../stores/transfer'
 
+const transferStore = useTransferStore()
 const props = defineProps({
   activeMenu: { type: String, default: 'files' }
 })
