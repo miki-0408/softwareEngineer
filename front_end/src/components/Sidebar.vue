@@ -80,8 +80,8 @@ const userStore = useUserStore()
 const avatarUrl = computed(() => {
   const av = userStore.avatar
   if (!av) return ''
-  if (av.startsWith('http')) return av
-  return '/api' + av
+  if (av.startsWith('http') || av.startsWith('/files')) return av
+  return import.meta.env.PROD ? av : '/api' + av
 })
 
 function handleSelect(index) {
