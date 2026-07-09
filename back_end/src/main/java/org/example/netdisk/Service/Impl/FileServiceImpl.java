@@ -60,7 +60,10 @@ public class FileServiceImpl implements FileService {
             if (privateRoot == null) {
                 throw new RuntimeException("私密空间根目录不存在，请先启用私密空间");
             }
-            targetDirId = privateRoot.getDirId();
+            // 如果源目录已在私密空间内，保持原 dirId；否则重定向到私密空间根
+            if (!isInPrivateSpace(userId, dirId, privateRoot.getDirId())) {
+                targetDirId = privateRoot.getDirId();
+            }
             isEncryptedFlag = encrypted;
         }
         Directory directory = directoryMapper.selectDirectoryById(targetDirId, userId);
@@ -129,7 +132,10 @@ public class FileServiceImpl implements FileService {
             if (privateRoot == null) {
                 throw new RuntimeException("私密空间根目录不存在，请先启用私密空间");
             }
-            targetDirId = privateRoot.getDirId();
+            // 如果源目录已在私密空间内，保持原 dirId；否则重定向到私密空间根
+            if (!isInPrivateSpace(userId, dirId, privateRoot.getDirId())) {
+                targetDirId = privateRoot.getDirId();
+            }
             isEncryptedFlag = encrypted;
         }
         Directory directory = directoryMapper.selectDirectoryById(targetDirId, userId);
@@ -357,6 +363,7 @@ public class FileServiceImpl implements FileService {
 
         netdiskFile.setPath(newPath);
         netdiskFile.setFileSize((long) newStoredBytes.length);
+        netdiskFile.setFileName(uniqueFileName(userId, targetDirId, netdiskFile.getFileName()));
         netdiskFile.setDirId(targetDirId);
         netdiskFile.setIsEncrypted(encrypted);
         return fileMapper.updateFile(netdiskFile) > 0;
@@ -442,6 +449,20 @@ public class FileServiceImpl implements FileService {
             if (d.getParentDirId() == null) return false;
             if (d.getParentDirId().equals(ancestorDirId)) return true;
             current = d.getParentDirId();
+        }
+        return false;
+    }
+
+    /** 检查 dirId 是否在 privateRootId 的子树内（含自身） */
+    private boolean isInPrivateSpace(Long userId, Long dirId, Long privateRootId) {
+        if (dirId == null || privateRootId == null) return false;
+        if (dirId.equals(privateRootId)) return true;
+        Long cur = dirId;
+        for (int i = 0; i < 20; i++) {
+            Directory d = directoryMapper.selectDirectoryById(cur, userId);
+            if (d == null || d.getParentDirId() == null) return false;
+            if (d.getParentDirId().equals(privateRootId)) return true;
+            cur = d.getParentDirId();
         }
         return false;
     }

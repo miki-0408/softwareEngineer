@@ -14,7 +14,7 @@ export const useTransferStore = defineStore('transfer', () => {
   }
 
   /** 添加上传任务: builder 返回 { xhr, body } */
-  function addUpload(name, size, builder) {
+  function addUpload(name, size, builder, onComplete) {
     const id = ++taskId
     tasks.value.push({ id, name, size, type: 'upload', status: 'queued', progress: 0, errorMsg: '' })
     enqueue(() => {
@@ -38,8 +38,9 @@ export const useTransferStore = defineStore('transfer', () => {
           task.status = 'done'
         }
         running.value--
+        if (onComplete) onComplete(task.status === 'done')
       }
-      xhr.onerror = () => { task.status = 'error'; task.errorMsg = '网络错误'; running.value-- }
+      xhr.onerror = () => { task.status = 'error'; task.errorMsg = '网络错误'; running.value--; if (onComplete) onComplete(false) }
       xhr.send(body)
     })
     return id

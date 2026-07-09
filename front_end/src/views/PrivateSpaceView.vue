@@ -573,7 +573,7 @@ async function onUploadConfirm({ files, packMethod, compressMethod, tarName }) {
           xhr.open('POST', base + '/user/file/upload')
           if (token) xhr.setRequestHeader('Authorization', 'Bearer ' + token)
           return { xhr, body: fd }
-        })
+        }, (success) => { if (success) refreshCurrentDir() })
       }
     } else {
       const finalName = tarName || (files[0].name.replace(/\.[^.]+$/, '') + '.tar')
@@ -592,7 +592,7 @@ async function onUploadConfirm({ files, packMethod, compressMethod, tarName }) {
         xhr.open('POST', base + '/user/file/upload')
         if (token) xhr.setRequestHeader('Authorization', 'Bearer ' + token)
         return { xhr, body: fd }
-      })
+      }, (success) => { if (success) refreshCurrentDir() })
     }
     uploadVisible.value = false
     ElMessage.success('已加入传输队列')
@@ -690,6 +690,7 @@ async function buildNormalDirTree(parentId) {
 async function onDecryptTargetSelected(targetDirId) {
   const targets = Array.isArray(_decryptTarget) ? _decryptTarget
     : (_decryptTarget ? [_decryptTarget] : [])
+  ElMessage.info(`正在移出 ${targets.length} 个文件...`)
   let ok = 0
   for (const item of targets) {
     try {

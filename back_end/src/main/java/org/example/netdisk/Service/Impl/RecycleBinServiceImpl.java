@@ -1,7 +1,9 @@
 package org.example.netdisk.Service.Impl;
 
 import lombok.extern.slf4j.Slf4j;
+import org.example.netdisk.Entity.Directory;
 import org.example.netdisk.Entity.NetdiskFile;
+import org.example.netdisk.Mapper.DirectoryMapper;
 import org.example.netdisk.Mapper.FileMapper;
 import org.example.netdisk.ResponseDTO.R_File;
 import org.example.netdisk.Service.Inter.RecycleBinService;
@@ -13,8 +15,7 @@ import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.example.netdisk.Service.Support.Enum.fileStatusNormal;
-import static org.example.netdisk.Service.Support.Enum.fileStatusRecycle;
+import static org.example.netdisk.Service.Support.Enum.*;
 
 @Slf4j
 @Service
@@ -22,6 +23,10 @@ public class RecycleBinServiceImpl implements RecycleBinService {
 
     @Autowired
     private FileMapper fileMapper;
+    @Autowired
+    private DirectoryMapper directoryMapper;
+    @Autowired
+    private PrivateSpaceServiceImpl privateSpaceService;
     @Autowired
     private FileServiceImpl fileService;
     @Autowired
@@ -44,6 +49,24 @@ public class RecycleBinServiceImpl implements RecycleBinService {
         NetdiskFile netdiskFile = fileMapper.selectFileById(fileId, userId);
         if (netdiskFile == null || netdiskFile.getStatus() != fileStatusRecycle) {
             return false;
+        }
+        // 如果原始目录已被删除或为空，回退到根目录
+        boolean needRedirect = netdiskFile.getDirId() == null;
+        if (!needRedirect && netdiskFile.getDirId() != null) {
+            Directory dir = directoryMapper.selectDirectoryById(netdiskFile.getDirId(), userId);
+            needRedirect = (dir == null);
+        }
+        if (needRedirect) {
+            Long fallbackDirId = null;
+            if (netdiskFile.getIsEncrypted() == encrypted) {
+                Directory privateRoot = privateSpaceService.findPrivateSpaceRoot(userId);
+                fallbackDirId = privateRoot != null ? privateRoot.getDirId() : null;
+            } else {
+                Directory userRoot = directoryMapper.selectRootDirectory(userId);
+                fallbackDirId = userRoot != null ? userRoot.getDirId() : null;
+            }
+            netdiskFile.setDirId(fallbackDirId);
+            fileMapper.updateFile(netdiskFile);
         }
         return fileMapper.updateFileStatus(fileId, userId, fileStatusNormal) > 0;
     }

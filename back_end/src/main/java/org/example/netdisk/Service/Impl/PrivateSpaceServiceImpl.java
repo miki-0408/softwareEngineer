@@ -47,9 +47,9 @@ public class PrivateSpaceServiceImpl implements PrivateSpaceService {
         } else {
             privateSpaceMapper.updatePrivateSpace(privateSpace);
         }
-        // 创建私密空间根目录
-        Directory rootDir = directoryMapper.selectRootDirectory(userId);
-        if (rootDir != null) {
+        // 创建私密空间根目录（如果不存在）
+        Directory existingRoot = findPrivateSpaceRoot(userId);
+        if (existingRoot == null) {
             Directory privateRoot = new Directory();
             privateRoot.setDirName(privateSpaceRootDirName);
             privateRoot.setParentDirId(null);
@@ -68,7 +68,7 @@ public class PrivateSpaceServiceImpl implements PrivateSpaceService {
         if (!BcryptUtil.matches(password, privateSpace.getPassword())) {
             return false;
         }
-        // 检查私密空间根目录是否为空（无子目录、无文件）
+        // 检查并删除私密空间根目录
         Directory privateRoot = findPrivateSpaceRoot(userId);
         if (privateRoot != null) {
             int dirCount = directoryMapper.selectDirectoriesByParentId(userId, privateRoot.getDirId()).size();
@@ -76,6 +76,7 @@ public class PrivateSpaceServiceImpl implements PrivateSpaceService {
             if (dirCount > 0 || fileCount > 0) {
                 throw new RuntimeException("私密空间中仍有文件，请先将所有文件移出后再关闭");
             }
+            directoryMapper.deleteDirectory(privateRoot.getDirId(), userId);
         }
         privateSpace.setIsEncrypted(privateSpaceDisabled);
         privateSpaceMapper.updatePrivateSpace(privateSpace);
