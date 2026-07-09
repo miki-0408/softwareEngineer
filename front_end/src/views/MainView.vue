@@ -651,17 +651,15 @@ async function onUploadConfirm({ files, packMethod, compressMethod, tarName, enc
 
   try {
     if (packMethod === 'none') {
-      let targetDirId = currentDirId.value
-      const firstRp = files[0].relativePath
-      if (firstRp && firstRp.includes('/')) {
-        try {
-          const res = await directoryAPI.create(firstRp.split('/')[0], currentDirId.value)
-          targetDirId = Number(res.data.data.dirId)
-        } catch { /* skip */ }
-      }
+      // 构建子目录树，返回每个相对路径 → dirId 的映射
+      const dirMap = await buildUploadDirTree(files, currentDirId.value)
       const token = localStorage.getItem('token')
       const base = import.meta.env.PROD ? '' : '/api'
       for (const f of files) {
+        // 确定目标目录：取文件路径去掉文件名后的目录部分
+        const rp = f.relativePath || f.name
+        const dirPath = rp.includes('/') ? rp.substring(0, rp.lastIndexOf('/')) : ''
+        const targetDirId = dirMap[dirPath] || dirMap[''] || currentDirId.value
         const fd = new FormData()
         fd.append('dirId', targetDirId)
         fd.append('files', new File([f.raw], f.name, { type: f.raw.type || 'application/octet-stream' }))
@@ -773,6 +771,36 @@ function handleFileAction(cmd, file) {
 // 移入私密空间：选择目标目录
 const encryptPickerVisible = ref(false)
 let _encryptTarget = null  // 待加密的文件（单个或数组）
+
+/** 根据文件列表的相对路径，在 parentId 下创建目录树，返回 path→dirId 映射 */
+async function buildUploadDirTree(files, parentId) {
+  const dirSet = new Set()
+  files.forEach(f => {
+    const rp = f.relativePath || f.name
+    if (rp.includes('/')) {
+      // 收集所有中间目录路径
+      const parts = rp.split('/')
+      let path = ''
+      for (let i = 0; i < parts.length - 1; i++) {
+        path = path ? path + '/' + parts[i] : parts[i]
+        dirSet.add(path)
+      }
+    }
+  })
+  // 按路径深度排序（浅层先创建）
+  const sorted = [...dirSet].sort((a, b) => a.split('/').length - b.split('/').length)
+  const map = { '': parentId }  // 空路径 → 根目录
+  for (const dirPath of sorted) {
+    const name = dirPath.split('/').pop()
+    const parentPath = dirPath.includes('/') ? dirPath.substring(0, dirPath.lastIndexOf('/')) : ''
+    const parentDirId = map[parentPath] || parentId
+    try {
+      const res = await directoryAPI.create(name, parentDirId)
+      map[dirPath] = Number(res.data.data.dirId)
+    } catch { map[dirPath] = parentDirId }
+  }
+  return map
+}
 
 function openEncryptPicker(target) {
   _encryptTarget = target
