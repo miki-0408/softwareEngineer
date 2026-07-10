@@ -57,7 +57,7 @@ public class TarUtil {
                 data = new byte[(int) size];
                 bis.read(data);
                 int skip = (int) ((BLOCK_SIZE - (size % BLOCK_SIZE)) % BLOCK_SIZE);
-                if (skip > 0) bis.skip(skip);
+                while (skip > 0) skip -= bis.skip(skip);
             }
             entries.add(new TarEntry(name, data, false));
         }
@@ -69,7 +69,7 @@ public class TarUtil {
         byte[] header = new byte[BLOCK_SIZE];
 
         writeCString(header, 0, 100, entry.name);
-        writeOctal(header, 100, 8, 0100644);              // mode = regular file
+        writeOctal(header, 100, 8, 33188);                // mode = regular file (0100644)
         writeOctal(header, 108, 8, 0);                    // uid
         writeOctal(header, 116, 8, 0);                    // gid
         writeOctal(header, 124, 12, entry.data != null ? entry.data.length : 0);
@@ -128,7 +128,7 @@ public class TarUtil {
         for (int i = offset; i < offset + len; i++) {
             byte b = buf[i];
             if (b == 0 || b == ' ') break;
-            if (b >= '0' && b <= '7') result = result * 8 + (b - '0');
+            if (b >= '0' && b <= '7') result = result * 8 + b - '0';
         }
         return result;
     }

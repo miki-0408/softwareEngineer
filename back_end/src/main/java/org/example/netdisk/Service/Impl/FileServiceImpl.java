@@ -21,7 +21,6 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.List;
 import java.util.Objects;
 
 import static org.example.netdisk.Service.Support.Enum.*;
@@ -48,70 +47,18 @@ public class FileServiceImpl implements FileService {
     @Override
     public R_File uploadFile(Long userId, Long dirId, MultipartFile file, boolean encrypt,
                              String privatePassword, String packMethod, String compressMethod) {
-        if (file == null || file.isEmpty()) {
-            throw new RuntimeException("上传文件不能为空");
-        }
-        Long targetDirId = dirId;
-        int isEncryptedFlag = notEncrypted;
-
-        if (encrypt) {
-            privateSpaceService.validatePrivatePassword(userId, privatePassword);
-            Directory privateRoot = privateSpaceService.findPrivateSpaceRoot(userId);
-            if (privateRoot == null) {
-                throw new RuntimeException("私密空间根目录不存在，请先启用私密空间");
-            }
-            // 如果源目录已在私密空间内，保持原 dirId；否则重定向到私密空间根
-            if (!isInPrivateSpace(userId, dirId, privateRoot.getDirId())) {
-                targetDirId = privateRoot.getDirId();
-            }
-            isEncryptedFlag = encrypted;
-        }
-        Directory directory = directoryMapper.selectDirectoryById(targetDirId, userId);
-        if (directory == null) {
-            throw new RuntimeException("目录不存在");
-        }
-
+        if (file == null || file.isEmpty()) throw new RuntimeException("上传文件不能为空");
+        Long targetDirId = resolveEncryptTarget(userId, dirId, encrypt, privatePassword);
+        int isEncryptedFlag = encrypt ? encrypted : notEncrypted;
         try {
-            byte[] rawBytes = file.getBytes();
-
-            // 处理管道: 打包 → 压缩 → 加密
-            byte[] processed = processUpload(rawBytes, packMethod, compressMethod,
+            byte[] processed = processUpload(file.getBytes(), packMethod, compressMethod,
                 encrypt ? privatePassword : null);
-
-            long storedSize = processed.length;
-
-            StorageSpace storageSpace = storageSpaceMapper.selectByUserId(userId);
-            if (storageSpace == null || storageSpace.getRemainSpace() < storedSize) {
-                throw new RuntimeException("存储空间不足");
-            }
-
-            // 文件名加上打包后缀
-            String displayName = Objects.requireNonNullElse(file.getOriginalFilename(), "未命名文件");
-            if ("tar".equals(packMethod) && !displayName.endsWith(".tar")) {
-                displayName += ".tar";
-            }
-            displayName = uniqueFileName(userId, targetDirId, displayName);
-
-            NetdiskFile netdiskFile = new NetdiskFile();
-            netdiskFile.setFileName(displayName);
-            netdiskFile.setFileType(extractFileType(displayName));
-            netdiskFile.setFileSize(storedSize);
-            netdiskFile.setUserId(userId);
-            netdiskFile.setDirId(targetDirId);
-            netdiskFile.setStatus(fileStatusNormal);
-            netdiskFile.setIsEncrypted(isEncryptedFlag);
-            netdiskFile.setCompressMethod((int) compressCode(compressMethod));
-            fileMapper.insertFile(netdiskFile);
-
-            String path = fileStorageService.saveCompressedFile(processed, userId, netdiskFile.getFileId());
-            netdiskFile.setPath(path);
-            fileMapper.updateFile(netdiskFile);
-
-            updateStorageUsed(storageSpace, storedSize);
-            return transformService.transformFileToRFile(netdiskFile);
-        } catch (IOException e) {
-            throw new RuntimeException("文件上传失败", e);
-        }
+            StorageSpace sp = requireStorage(userId, processed.length);
+            String name = Objects.requireNonNullElse(file.getOriginalFilename(), "未命名文件");
+            if ("tar".equals(packMethod) && !name.endsWith(".tar")) name += ".tar";
+            return transformService.transformFileToRFile(
+                insertAndSaveFile(userId, targetDirId, name, processed.length, processed, compressMethod, isEncryptedFlag, sp));
+        } catch (IOException e) { throw new RuntimeException("文件上传失败", e); }
     }
 
     // ==================== 多文件/文件夹上传 ====================
@@ -120,98 +67,45 @@ public class FileServiceImpl implements FileService {
     public R_File uploadFiles(Long userId, Long dirId, List<MultipartFile> files, List<String> relativePaths,
                               boolean encrypt, String privatePassword, String packMethod, String compressMethod,
                               String displayName) {
-        if (files == null || files.isEmpty()) {
-            throw new RuntimeException("上传文件不能为空");
-        }
-        Long targetDirId = dirId;
-        int isEncryptedFlag = notEncrypted;
-
-        if (encrypt) {
-            privateSpaceService.validatePrivatePassword(userId, privatePassword);
-            Directory privateRoot = privateSpaceService.findPrivateSpaceRoot(userId);
-            if (privateRoot == null) {
-                throw new RuntimeException("私密空间根目录不存在，请先启用私密空间");
-            }
-            // 如果源目录已在私密空间内，保持原 dirId；否则重定向到私密空间根
-            if (!isInPrivateSpace(userId, dirId, privateRoot.getDirId())) {
-                targetDirId = privateRoot.getDirId();
-            }
-            isEncryptedFlag = encrypted;
-        }
-        Directory directory = directoryMapper.selectDirectoryById(targetDirId, userId);
-        if (directory == null) {
-            throw new RuntimeException("目录不存在");
-        }
+        if (files == null || files.isEmpty()) throw new RuntimeException("上传文件不能为空");
+        Long targetDirId = resolveEncryptTarget(userId, dirId, encrypt, privatePassword);
+        int isEncryptedFlag = encrypt ? encrypted : notEncrypted;
+        boolean actuallyTarred = files.size() > 1 || "tar".equals(packMethod);
 
         try {
             byte[] rawBytes;
-            boolean actuallyTarred = files.size() > 1 || "tar".equals(packMethod);
-
             if (files.size() == 1 && !"tar".equals(packMethod)) {
-                // 单文件、不打包：直接用文件内容
                 rawBytes = files.get(0).getBytes();
             } else {
-                // 多文件 或 要求打包：构建 tar 归档
-                List<TarUtil.TarEntry> entries = new java.util.ArrayList<>();
+                List<TarUtil.TarEntry> entries = new ArrayList<>();
                 for (int i = 0; i < files.size(); i++) {
                     MultipartFile f = files.get(i);
-                    String entryName;
-                    if (relativePaths != null && i < relativePaths.size() && relativePaths.get(i) != null) {
-                        entryName = relativePaths.get(i).replace('\\', '/');
-                    } else {
-                        entryName = f.getOriginalFilename() != null ? f.getOriginalFilename() : "file" + i;
-                    }
+                    String entryName = (relativePaths != null && i < relativePaths.size() && relativePaths.get(i) != null)
+                        ? relativePaths.get(i).replace('\\', '/')
+                        : f.getOriginalFilename() != null ? f.getOriginalFilename() : "file" + i;
                     if (entryName.isEmpty()) entryName = "file" + i;
                     entries.add(new TarUtil.TarEntry(entryName, f.getBytes(), false));
                 }
                 rawBytes = TarUtil.createTar(entries);
-                packMethod = "none"; // 已在外面打好 tar，processUpload 不要再打一层
+                packMethod = "none";
             }
 
-            // 生成显示名称（前端传来的优先）
             String finalName;
             if (displayName != null && !displayName.isBlank()) {
                 finalName = displayName;
             } else if (files.size() == 1 && !actuallyTarred) {
                 finalName = Objects.requireNonNullElse(files.get(0).getOriginalFilename(), "未命名文件");
-            } else if (files.size() == 1) {
-                finalName = Objects.requireNonNullElse(files.get(0).getOriginalFilename(), "file");
-                if (!finalName.endsWith(".tar")) finalName += ".tar";
             } else {
-                finalName = "archive_" + System.currentTimeMillis() + ".tar";
-            }
-            finalName = uniqueFileName(userId, targetDirId, finalName);
-
-            byte[] processed = processUpload(rawBytes, packMethod, compressMethod,
-                encrypt ? privatePassword : null);
-
-            long storedSize = processed.length;
-
-            StorageSpace storageSpace = storageSpaceMapper.selectByUserId(userId);
-            if (storageSpace == null || storageSpace.getRemainSpace() < storedSize) {
-                throw new RuntimeException("存储空间不足");
+                finalName = files.size() == 1
+                    ? Objects.requireNonNullElse(files.get(0).getOriginalFilename(), "file") + ".tar"
+                    : "archive_" + System.currentTimeMillis() + ".tar";
             }
 
-            NetdiskFile netdiskFile = new NetdiskFile();
-            netdiskFile.setFileName(finalName);
-            netdiskFile.setFileType(extractFileType(finalName));
-            netdiskFile.setFileSize(storedSize);
-            netdiskFile.setUserId(userId);
-            netdiskFile.setDirId(targetDirId);
-            netdiskFile.setStatus(fileStatusNormal);
-            netdiskFile.setIsEncrypted(isEncryptedFlag);
-            netdiskFile.setCompressMethod((int) compressCode(compressMethod));
-            fileMapper.insertFile(netdiskFile);
-
-            String path = fileStorageService.saveCompressedFile(processed, userId, netdiskFile.getFileId());
-            netdiskFile.setPath(path);
-            fileMapper.updateFile(netdiskFile);
-
-            updateStorageUsed(storageSpace, storedSize);
-            return transformService.transformFileToRFile(netdiskFile);
-        } catch (IOException e) {
-            throw new RuntimeException("文件上传失败", e);
-        }
+            byte[] processed = processUpload(rawBytes, packMethod, compressMethod, encrypt ? privatePassword : null);
+            StorageSpace sp = requireStorage(userId, processed.length);
+            return transformService.transformFileToRFile(
+                insertAndSaveFile(userId, targetDirId, finalName, processed.length, processed, compressMethod, isEncryptedFlag, sp));
+        } catch (IOException e) { throw new RuntimeException("文件上传失败", e); }
     }
 
     // ==================== 文件下载 ====================
@@ -439,18 +333,48 @@ public class FileServiceImpl implements FileService {
     }
 
     /** 检查 dirId 是否是 ancestorDirId 的后代（含自身） */
-    private boolean isUnderDir(Long userId, Long dirId, Long ancestorDirId) {
-        if (dirId == null || ancestorDirId == null) return false;
-        if (dirId.equals(ancestorDirId)) return true;
-        Long current = dirId;
-        for (int i = 0; i < 20; i++) { // 最多向上查 20 层
-            Directory d = directoryMapper.selectDirectoryById(current, userId);
-            if (d == null) return false;
-            if (d.getParentDirId() == null) return false;
-            if (d.getParentDirId().equals(ancestorDirId)) return true;
-            current = d.getParentDirId();
+    /** 加密上传时解析目标目录 */
+    private Long resolveEncryptTarget(Long userId, Long dirId, boolean encrypt, String privatePassword) {
+        if (!encrypt) {
+            Directory d = directoryMapper.selectDirectoryById(dirId, userId);
+            if (d == null) throw new RuntimeException("目录不存在");
+            return dirId;
         }
-        return false;
+        privateSpaceService.validatePrivatePassword(userId, privatePassword);
+        Directory privateRoot = privateSpaceService.findPrivateSpaceRoot(userId);
+        if (privateRoot == null) throw new RuntimeException("私密空间根目录不存在，请先启用私密空间");
+        Long target = isInPrivateSpace(userId, dirId, privateRoot.getDirId()) ? dirId : privateRoot.getDirId();
+        Directory d = directoryMapper.selectDirectoryById(target, userId);
+        if (d == null) throw new RuntimeException("目录不存在");
+        return target;
+    }
+
+    /** 检查并返回存储空间 */
+    private StorageSpace requireStorage(Long userId, long size) {
+        StorageSpace sp = storageSpaceMapper.selectByUserId(userId);
+        if (sp == null || sp.getRemainSpace() < size) throw new RuntimeException("存储空间不足");
+        return sp;
+    }
+
+    /** 插入文件记录 + 写磁盘 + 更新存储空间 */
+    private NetdiskFile insertAndSaveFile(Long userId, Long targetDirId, String displayName,
+            long storedSize, byte[] processed, String compressMethod, int isEncryptedFlag,
+            StorageSpace storageSpace) throws IOException {
+        displayName = uniqueFileName(userId, targetDirId, displayName);
+        NetdiskFile f = new NetdiskFile();
+        f.setFileName(displayName);
+        f.setFileType(extractFileType(displayName));
+        f.setFileSize(storedSize);
+        f.setUserId(userId);
+        f.setDirId(targetDirId);
+        f.setStatus(fileStatusNormal);
+        f.setIsEncrypted(isEncryptedFlag);
+        f.setCompressMethod((int) compressCode(compressMethod));
+        fileMapper.insertFile(f);
+        f.setPath(fileStorageService.saveCompressedFile(processed, userId, f.getFileId()));
+        fileMapper.updateFile(f);
+        updateStorageUsed(storageSpace, storedSize);
+        return f;
     }
 
     /** 检查 dirId 是否在 privateRootId 的子树内（含自身） */

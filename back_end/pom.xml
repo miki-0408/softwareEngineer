@@ -68,6 +68,29 @@
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
 			</plugin>
+			<!-- PMD 源代码分析 -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-pmd-plugin</artifactId>
+				<version>3.26.0</version>
+				<configuration>
+					<includeTests>false</includeTests>
+					<linkXRef>false</linkXRef>
+					<sourceEncoding>UTF-8</sourceEncoding>
+					<targetJdk>${java.version}</targetJdk>
+				</configuration>
+			</plugin>
+			<!-- SpotBugs 字节码缺陷分析 -->
+			<plugin>
+				<groupId>com.github.spotbugs</groupId>
+				<artifactId>spotbugs-maven-plugin</artifactId>
+				<version>4.9.1.0</version>
+				<configuration>
+					<includeTests>false</includeTests>
+					<xmlOutput>true</xmlOutput>
+					<htmlOutput>true</htmlOutput>
+				</configuration>
+			</plugin>
 		</plugins>
 	</build>
 

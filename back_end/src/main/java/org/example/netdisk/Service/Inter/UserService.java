@@ -1,6 +1,5 @@
 package org.example.netdisk.Service.Inter;
 
-import org.example.netdisk.ResponseDTO.R_LoginDTO;
 import org.example.netdisk.ResponseDTO.R_UserInfoDTO;
 import org.springframework.web.multipart.MultipartFile;
 

@@ -63,7 +63,7 @@ public class HuffmanCompression {
         bos.write((bitLen >> 8) & 0xFF);
         bos.write(bitLen & 0xFF);
         // 编码数据
-        try { bos.write(encodedBytes); } catch (Exception e) { /* ignore */ }
+        try { bos.write(encodedBytes); } catch (Exception e) { throw new RuntimeException("编码写入失败", e); }
 
         return bos.toByteArray();
     }
