@@ -22,7 +22,7 @@
               </template>
               <el-form label-position="top" @submit.prevent="doResetPassword">
                 <el-form-item label="用户 ID">
-                  <el-input v-model="resetUserId" type="number" placeholder="请输入用户ID"
+                  <el-input v-model="resetUserId" placeholder="请输入用户ID"
                     :prefix-icon="User" />
                 </el-form-item>
                 <el-alert
@@ -49,7 +49,7 @@
               </template>
               <el-form label-position="top" @submit.prevent="doUpdateUser">
                 <el-form-item label="用户 ID">
-                  <el-input v-model="updateUserId" type="number" placeholder="请输入用户ID" />
+                  <el-input v-model="updateUserId" placeholder="请输入用户ID" />
                 </el-form-item>
                 <el-form-item label="新用户名">
                   <el-input v-model="updateUsername" placeholder="请输入新用户名" />
