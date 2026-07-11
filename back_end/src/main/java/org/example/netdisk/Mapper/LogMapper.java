@@ -14,6 +14,6 @@ public interface LogMapper {
     @Insert("INSERT INTO log (operatorId, description) VALUES (#{operatorId}, #{description})")
     void insertLog(@Param("operatorId") Long operatorId, @Param("description") String description);
 
-    @Select("SELECT * FROM log ORDER BY time DESC")
+    @Select("SELECT * FROM log ORDER BY time DESC LIMIT 200")
     List<Log> selectAllLogs();
 }

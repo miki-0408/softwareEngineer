@@ -9,23 +9,17 @@ const http = axios.create({
 // 请求拦截器：自动附带 token
 http.interceptors.request.use(config => {
   const token = localStorage.getItem('token')
-  if (token) {
-    config.headers['Authorization'] = 'Bearer ' + token
-  }
+  if (token) config.headers['Authorization'] = 'Bearer ' + token
   return config
 })
 
 // 响应拦截器：统一处理错误
 http.interceptors.response.use(
   response => {
-    // 下载文件返回的是 blob，不处理
-    if (response.config.responseType === 'blob') {
-      return response
-    }
+    if (response.config.responseType === 'blob') return response
     const data = response.data
     if (data && data.code !== undefined && data.code !== 0) {
       if (data.code === 2) {
-        ElMessage.warning(data.message || '文件名冲突')
         const err = new Error(data.message || '文件名冲突')
         err.conflict = true
         err.conflictName = data.data
@@ -53,221 +47,99 @@ http.interceptors.response.use(
   }
 )
 
+// ===================== 通用助手 =====================
+
+/** POST application/x-www-form-urlencoded — 自动跳过 null/undefined */
+function post(url, params = {}) {
+  const p = new URLSearchParams()
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== null && v !== undefined) p.append(String(k), v)
+  }
+  return http.post(url, p)
+}
+
+/** POST multipart/form-data */
+function postForm(url, fields = {}, fileFields = {}) {
+  const fd = new FormData()
+  for (const [k, v] of Object.entries(fields)) {
+    if (v !== null && v !== undefined) fd.append(k, String(v))
+  }
+  for (const [k, v] of Object.entries(fileFields)) {
+    if (v !== null && v !== undefined) fd.append(k, v)
+  }
+  return http.post(url, fd)
+}
+
 // ===================== 认证 =====================
 
 export const authAPI = {
-  login(username, password) {
-    const params = new URLSearchParams()
-    params.append('username', username)
-    params.append('password', password)
-    return http.post('/login', params)
-  },
-
-  register(username, password, gender, avatarFile) {
-    const fd = new FormData()
-    fd.append('username', username)
-    fd.append('password', password)
-    if (gender) fd.append('gender', gender)
-    if (avatarFile) fd.append('avatar', avatarFile)
-    return http.post('/register', fd)
-  }
+  login: (username, password) => post('/login', { username, password }),
+  register: (username, password, gender, avatarFile) =>
+    postForm('/register', { username, password, gender }, { avatar: avatarFile })
 }
 
 // ===================== 用户 =====================
 
 export const userAPI = {
-  getUserInfo(userId) {
-    const params = new URLSearchParams()
-    params.append('userId', userId)
-    return http.post('/userInfo', params)
-  },
-
-  changePassword(oldPassword, newPassword) {
-    const params = new URLSearchParams()
-    params.append('oldPassword', oldPassword)
-    params.append('newPassword', newPassword)
-    return http.post('/changePassword', params)
-  },
-
-  updateUserInfo(newUsername, newGender, newAvatar) {
-    const fd = new FormData()
-    fd.append('newUsername', newUsername)
-    if (newGender) fd.append('newGender', newGender)
-    if (newAvatar) fd.append('newAvatar', newAvatar)
-    return http.post('/user/updateUserInfo', fd)
-  }
+  getUserInfo: (userId) => post('/userInfo', { userId }),
+  changePassword: (oldPassword, newPassword) => post('/changePassword', { oldPassword, newPassword }),
+  updateUserInfo: (newUsername, newGender, newAvatar) =>
+    postForm('/user/updateUserInfo', { newUsername, newGender }, { newAvatar })
 }
 
 // ===================== 目录 =====================
 
 export const directoryAPI = {
-  list(parentDirId) {
-    const params = new URLSearchParams()
-    if (parentDirId !== null && parentDirId !== undefined) {
-      params.append('parentDirId', parentDirId)
-    }
-    return http.post('/user/directory/list', params)
-  },
-
-  create(dirName, parentDirId) {
-    const params = new URLSearchParams()
-    params.append('dirName', dirName)
-    if (parentDirId !== null && parentDirId !== undefined) {
-      params.append('parentDirId', parentDirId)
-    }
-    return http.post('/user/directory/create', params)
-  },
-
-  rename(dirId, newDirName) {
-    const params = new URLSearchParams()
-    params.append('dirId', dirId)
-    params.append('newDirName', newDirName)
-    return http.post('/user/directory/rename', params)
-  },
-
-  remove(dirId) {
-    const params = new URLSearchParams()
-    params.append('dirId', dirId)
-    return http.post('/user/directory/delete', params)
-  }
+  list: (parentDirId) => post('/user/directory/list', { parentDirId }),
+  create: (dirName, parentDirId) => post('/user/directory/create', { dirName, parentDirId }),
+  rename: (dirId, newDirName) => post('/user/directory/rename', { dirId, newDirName }),
+  remove: (dirId) => post('/user/directory/delete', { dirId })
 }
 
 // ===================== 文件 =====================
 
 export const fileAPI = {
-  list(dirId) {
-    const params = new URLSearchParams()
-    params.append('dirId', dirId)
-    return http.post('/user/file/list', params)
-  },
-
-  rename(fileId, newFileName, force) {
-    const params = new URLSearchParams()
-    params.append('fileId', fileId)
-    params.append('newFileName', newFileName)
-    if (force) params.append('force', 'true')
-    return http.post('/user/file/rename', params)
-  },
-
-  move(fileId, targetDirId, force) {
-    const params = new URLSearchParams()
-    params.append('fileId', fileId)
-    params.append('targetDirId', targetDirId)
-    if (force) params.append('force', 'true')
-    return http.post('/user/file/move', params)
-  },
-
-  remove(fileId) {
-    const params = new URLSearchParams()
-    params.append('fileId', fileId)
-    return http.post('/user/file/delete', params)
-  },
-
-  encrypt(fileId, privatePassword, targetDirId, force) {
-    const params = new URLSearchParams()
-    params.append('fileId', fileId)
-    params.append('privatePassword', privatePassword)
-    params.append('targetDirId', targetDirId)
-    if (force) params.append('force', 'true')
-    return http.post('/user/file/encrypt', params)
-  },
-
-  decrypt(fileId, privatePassword, targetDirId, force) {
-    const params = new URLSearchParams()
-    params.append('fileId', fileId)
-    params.append('privatePassword', privatePassword)
-    params.append('targetDirId', targetDirId)
-    if (force) params.append('force', 'true')
-    return http.post('/user/file/decrypt', params)
-  }
+  list: (dirId) => post('/user/file/list', { dirId }),
+  rename: (fileId, newFileName, force) =>
+    post('/user/file/rename', { fileId, newFileName, force: force ? 'true' : undefined }),
+  move: (fileId, targetDirId, force) =>
+    post('/user/file/move', { fileId, targetDirId, force: force ? 'true' : undefined }),
+  remove: (fileId) => post('/user/file/delete', { fileId }),
+  encrypt: (fileId, privatePassword, targetDirId, force) =>
+    post('/user/file/encrypt', { fileId, privatePassword, targetDirId, force: force ? 'true' : undefined }),
+  decrypt: (fileId, privatePassword, targetDirId, force) =>
+    post('/user/file/decrypt', { fileId, privatePassword, targetDirId, force: force ? 'true' : undefined })
 }
 
 // ===================== 回收站 =====================
 
 export const recycleAPI = {
-  list() {
-    return http.post('/user/recycle/list', new URLSearchParams())
-  },
-
-  restore(fileId) {
-    const params = new URLSearchParams()
-    params.append('fileId', fileId)
-    return http.post('/user/recycle/restore', params)
-  },
-
-  deletePermanent(fileId) {
-    const params = new URLSearchParams()
-    params.append('fileId', fileId)
-    return http.post('/user/recycle/deletePermanent', params)
-  }
+  list: () => post('/user/recycle/list'),
+  restore: (fileId) => post('/user/recycle/restore', { fileId }),
+  deletePermanent: (fileId) => post('/user/recycle/deletePermanent', { fileId })
 }
 
 // ===================== 私密空间 =====================
 
 export const privateSpaceAPI = {
-  status() {
-    return http.post('/user/privateSpace/status', new URLSearchParams())
-  },
-
-  enable(password) {
-    const params = new URLSearchParams()
-    params.append('password', password)
-    return http.post('/user/privateSpace/enable', params)
-  },
-
-  disable(password) {
-    const params = new URLSearchParams()
-    params.append('password', password)
-    return http.post('/user/privateSpace/disable', params)
-  },
-
-  verify(password) {
-    const params = new URLSearchParams()
-    params.append('password', password)
-    return http.post('/user/privateSpace/verify', params)
-  },
-
-  // 私密空间文件列表
-  listFiles(dirId) {
-    const params = new URLSearchParams()
-    params.append('dirId', dirId)
-    return http.post('/user/privateSpace/files', params)
-  },
-
-  // 私密空间目录列表
-  listDirectories(parentDirId) {
-    const params = new URLSearchParams()
-    if (parentDirId !== null && parentDirId !== undefined) {
-      params.append('parentDirId', parentDirId)
-    }
-    return http.post('/user/privateSpace/directories', params)
-  }
+  status: () => post('/user/privateSpace/status'),
+  enable: (password) => post('/user/privateSpace/enable', { password }),
+  disable: (password) => post('/user/privateSpace/disable', { password }),
+  verify: (password) => post('/user/privateSpace/verify', { password }),
+  listFiles: (dirId) => post('/user/privateSpace/files', { dirId }),
+  listDirectories: (parentDirId) => post('/user/privateSpace/directories', { parentDirId })
 }
 
 // ===================== 管理员 =====================
 
 export const adminAPI = {
-  getLogs() {
-    return http.get('/systemAdmin/logs')
-  },
-
-  resetPassword(userId) {
-    const params = new URLSearchParams()
-    params.append('userId', userId)
-    return http.post('/systemAdmin/resetPassword', params)
-  },
-
-  updateUserInfo(userId, newUsername, newGender, newAvatar) {
-    const fd = new FormData()
-    fd.append('userId', userId)
-    fd.append('newUsername', newUsername)
-    if (newGender) fd.append('newGender', newGender)
-    if (newAvatar) fd.append('newAvatar', newAvatar)
-    return http.post('/systemAdmin/updateUserInfo', fd)
-  }
+  getLogs: () => http.get('/systemAdmin/logs'),
+  resetPassword: (userId) => post('/systemAdmin/resetPassword', { userId }),
+  updateUserInfo: (userId, newUsername, newGender, newAvatar) =>
+    postForm('/systemAdmin/updateUserInfo', { userId, newUsername, newGender }, { newAvatar })
 }
 
-// ===================== 冲突重试 =====================
+// ===================== 冲突处理 =====================
 
 /** 遇到文件冲突时弹窗询问，确认则以 force=true 重试 */
 export async function handleConflict(error, retryWithForce) {
@@ -278,10 +150,16 @@ export async function handleConflict(error, retryWithForce) {
         '文件名冲突',
         { confirmButtonText: '替换', cancelButtonText: '跳过', type: 'warning' }
       )
-    } catch { return false /* 用户取消 */ }
+    } catch { return false }
     return await retryWithForce()
   }
   throw error
+}
+
+/** 冲突重试包装器 — 返回 true（成功）或 false（跳过），失败则抛异常 */
+export async function withConflictRetry(fn, forceFn) {
+  try { await fn(); return true }
+  catch (e) { return !!(await handleConflict(e, forceFn)) }
 }
 
 export default http

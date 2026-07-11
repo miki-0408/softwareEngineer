@@ -89,6 +89,7 @@ import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh, DeleteFilled, RefreshLeft, Document, Search } from '@element-plus/icons-vue'
 import { recycleAPI } from '../api'
+import { formatTime } from '../utils/format'
 import { useUserStore } from '../stores/user'
 import Sidebar from '../components/Sidebar.vue'
 
@@ -199,11 +200,6 @@ async function batchDeletePermanent() {
   }
   ElMessage.success(`已彻底删除 ${ok} 个文件`)
   await refreshList()
-}
-
-function formatTime(timeStr) {
-  if (!timeStr) return ''
-  return timeStr.replace('T', ' ')
 }
 
 onMounted(refreshList)

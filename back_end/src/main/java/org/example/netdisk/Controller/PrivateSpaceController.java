@@ -25,32 +25,18 @@ public class PrivateSpaceController {
     public Result<String> enablePrivateSpace(
             @RequestHeader("Authorization") String authHeader,
             @RequestParam("password") String password) throws Exception {
-        try {
-            Long userId = Long.parseLong((String) TokenProcess.getAttributeFromToken(authHeader, "userId"));
-            boolean ok = privateSpaceService.enablePrivateSpace(userId, password);
-            if (ok) {
-                return Result.success("私密空间已启用");
-            }
-            return Result.error("私密空间启用失败");
-        } catch (RuntimeException e) {
-            return Result.error(e.getMessage());
-        }
+        Long userId = Long.parseLong((String) TokenProcess.getAttributeFromToken(authHeader, "userId"));
+        boolean ok = privateSpaceService.enablePrivateSpace(userId, password);
+        return ok ? Result.success("私密空间已启用") : Result.error("私密空间启用失败");
     }
 
     @PostMapping("/user/privateSpace/disable")
     public Result<String> disablePrivateSpace(
             @RequestHeader("Authorization") String authHeader,
             @RequestParam("password") String password) throws Exception {
-        try {
-            boolean ok = privateSpaceService.disablePrivateSpace(
-                    Long.parseLong((String) TokenProcess.getAttributeFromToken(authHeader, "userId")), password);
-            if (ok) {
-                return Result.success("私密空间已关闭");
-            }
-            return Result.error("私密空间关闭失败，密码错误或未启用");
-        } catch (RuntimeException e) {
-            return Result.error(e.getMessage());
-        }
+        boolean ok = privateSpaceService.disablePrivateSpace(
+                Long.parseLong((String) TokenProcess.getAttributeFromToken(authHeader, "userId")), password);
+        return ok ? Result.success("私密空间已关闭") : Result.error("私密空间关闭失败，密码错误或未启用");
     }
 
     @PostMapping("/user/privateSpace/verify")

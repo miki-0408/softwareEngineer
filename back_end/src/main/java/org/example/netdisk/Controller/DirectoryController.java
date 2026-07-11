@@ -20,13 +20,9 @@ public class DirectoryController {
             @RequestHeader("Authorization") String authHeader,
             @RequestParam("dirName") String dirName,
             @RequestParam(value = "parentDirId", required = false) Long parentDirId) throws Exception {
-        try {
-            Long userId = Long.parseLong((String) TokenProcess.getAttributeFromToken(authHeader, "userId"));
-            R_Directory directory = directoryService.createDirectory(userId, dirName, parentDirId);
-            return Result.success(directory);
-        } catch (RuntimeException e) {
-            return Result.error(e.getMessage());
-        }
+        Long userId = Long.parseLong((String) TokenProcess.getAttributeFromToken(authHeader, "userId"));
+        R_Directory directory = directoryService.createDirectory(userId, dirName, parentDirId);
+        return Result.success(directory);
     }
 
     @PostMapping("/user/directory/list")
@@ -55,15 +51,8 @@ public class DirectoryController {
     public Result<String> deleteDirectory(
             @RequestHeader("Authorization") String authHeader,
             @RequestParam("dirId") Long dirId) throws Exception {
-        try {
-            Long userId = Long.parseLong((String) TokenProcess.getAttributeFromToken(authHeader, "userId"));
-            boolean ok = directoryService.deleteDirectory(userId, dirId);
-            if (ok) {
-                return Result.success("目录删除成功");
-            }
-            return Result.error("目录删除失败");
-        } catch (RuntimeException e) {
-            return Result.error(e.getMessage());
-        }
+        Long userId = Long.parseLong((String) TokenProcess.getAttributeFromToken(authHeader, "userId"));
+        boolean ok = directoryService.deleteDirectory(userId, dirId);
+        return ok ? Result.success("目录删除成功") : Result.error("目录删除失败");
     }
 }

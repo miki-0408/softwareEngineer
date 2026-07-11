@@ -1,14 +1,14 @@
 <template>
   <el-dialog v-model="visible" :title="title" width="680px" @closed="clearFiles">
-    <div style="display:flex;gap:20px;min-height:280px;max-height:420px">
+    <div style="display:flex;gap:20px;min-height:280px;max-height:420px;overflow:hidden">
       <!-- 左侧：文件选择区 -->
       <div style="flex:3;display:flex;flex-direction:column;min-width:0;overflow:hidden">
-        <div class="flex-center gap-8" style="margin-bottom:10px">
-          <input ref="fileInput" type="file" multiple style="display:none" @change="onFilesChange" />
-          <input ref="folderInput" type="file" webkitdirectory style="display:none" @change="onFilesChange" />
-          <el-tag type="info" size="small" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
-            {{ targetPath }}
-          </el-tag>
+        <div class="flex-center gap-8" style="margin-bottom:10px;min-width:0">
+          <el-tooltip :content="targetPath" placement="top" :disabled="!targetPath || targetPath.length < 25">
+            <el-tag type="info" size="small" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:default">
+              {{ targetPath }}
+            </el-tag>
+          </el-tooltip>
           <div style="flex:1" />
           <el-button size="small" @click="fileInput.click()"><el-icon><Document /></el-icon> 文件</el-button>
           <el-button size="small" @click="folderInput.click()"><el-icon><Folder /></el-icon> 文件夹</el-button>
@@ -107,6 +107,7 @@
 <script setup>
 import { ref, reactive, computed } from 'vue'
 import { Document, Folder, Close, UploadFilled, Filter, ArrowDown, ArrowUp } from '@element-plus/icons-vue'
+import { formatSize } from '../utils/format'
 
 const props = defineProps({
   modelValue: Boolean,
@@ -219,12 +220,6 @@ function buildPayload() {
     encrypt: props.autoEncrypt || encrypt.value,
     filters: { ...filter }
   }
-}
-
-function formatSize(bytes) {
-  if (bytes < 1024) return bytes + ' B'
-  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB'
-  return (bytes / 1048576).toFixed(1) + ' MB'
 }
 </script>
 

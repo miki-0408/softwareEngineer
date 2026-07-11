@@ -24,4 +24,6 @@ public interface FileService {
     boolean encryptFile(Long userId, Long fileId, String privatePassword, Long targetDirId, boolean force);
 
     boolean decryptFile(Long userId, Long fileId, String privatePassword, Long targetDirId, boolean force);
+
+    String uniqueFileName(Long userId, Long dirId, String fileName);
 }

@@ -22,4 +22,9 @@ public class GlobalExceptionHandler {
     public Result<String> handleConflict(FileConflictException e) {
         return Result.conflict(e.getConflictName(), e.getMessage());
     }
+
+    @ExceptionHandler(RuntimeException.class)
+    public Result<String> handleRuntimeException(RuntimeException e) {
+        return Result.error(e.getMessage());
+    }
 }

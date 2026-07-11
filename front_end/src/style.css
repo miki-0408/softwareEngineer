@@ -115,6 +115,17 @@ a {
   margin-bottom: 24px;
 }
 
+/* 消除 tab 标签上的文本光标 */
+.login-tabs .el-tabs__item {
+  user-select: none;
+}
+
+/* 表单标签禁止选中文本，避免点击时光标异常 */
+.el-form-item__label {
+  user-select: none;
+  cursor: default;
+}
+
 /* ==================== 侧边栏 ==================== */
 .sidebar-header {
   padding: 20px 16px;

@@ -269,7 +269,8 @@ import {
   Lock, Key, FolderAdd, Upload, Refresh, Folder, Document,
   Download, Edit, Delete, MoreFilled, Rank, Unlock, Search
 } from '@element-plus/icons-vue'
-import { privateSpaceAPI, directoryAPI, fileAPI, userAPI, handleConflict } from '../api'
+import { privateSpaceAPI, directoryAPI, fileAPI, userAPI, withConflictRetry } from '../api'
+import { formatTime } from '../utils/format'
 import { useUserStore } from '../stores/user'
 import { useTransferStore } from '../stores/transfer'
 import UploadDialog from '../components/UploadDialog.vue'
@@ -531,7 +532,8 @@ async function doRenameFile() {
     renameFileVisible.value = false
     await refreshCurrentDir()
   } catch (e) {
-    await handleConflict(e,
+    await withConflictRetry(
+      () => fileAPI.rename(renameFileTarget.value.fileId, renameFileNewName.value.trim()),
       () => fileAPI.rename(renameFileTarget.value.fileId, renameFileNewName.value.trim(), true))
     renameFileVisible.value = false
     await refreshCurrentDir()
@@ -644,7 +646,8 @@ async function doMove() {
         await fileAPI.move(item.id, moveTargetDirId.value)
         ok++
       } catch (e) {
-        const retry = await handleConflict(e,
+        const retry = await withConflictRetry(
+          () => fileAPI.move(item.id, moveTargetDirId.value),
           () => fileAPI.move(item.id, moveTargetDirId.value, true))
         if (retry) { ok++ } else { skipped++ }
       }
@@ -658,18 +661,13 @@ async function doMove() {
   }
   if (!moveTargetDirId.value) { ElMessage.warning('请选择目标文件夹'); return }
   moveLoading.value = true
-  try {
-    await fileAPI.move(moveFileTarget.value.fileId, moveTargetDirId.value)
-    ElMessage.success('已移动')
-    moveVisible.value = false
-    await refreshCurrentDir()
-  } catch (e) {
-    await handleConflict(e,
-      () => fileAPI.move(moveFileTarget.value.fileId, moveTargetDirId.value, true))
-    moveVisible.value = false
-    await refreshCurrentDir()
-  }
-  finally { moveLoading.value = false }
+  const fileTarget = moveFileTarget.value
+  await withConflictRetry(
+    () => fileAPI.move(fileTarget.fileId, moveTargetDirId.value),
+    () => fileAPI.move(fileTarget.fileId, moveTargetDirId.value, true))
+  moveVisible.value = false
+  moveLoading.value = false
+  await refreshCurrentDir()
 }
 
 // 移出私密空间：选择目标目录
@@ -731,8 +729,11 @@ async function onDecryptTargetSelected(targetDirId) {
       await fileAPI.decrypt(item.id || item.fileId, userStore.privatePassword, targetDirId)
       ok++
     } catch (e) {
-      const retry = await handleConflict(e,
-        () => fileAPI.decrypt(item.id || item.fileId, userStore.privatePassword, targetDirId, true))
+      const pw = userStore.privatePassword
+      const id = item.id || item.fileId
+      const retry = await withConflictRetry(
+        () => fileAPI.decrypt(id, pw, targetDirId),
+        () => fileAPI.decrypt(id, pw, targetDirId, true))
       if (retry) { ok++ } else { skipped++ }
     }
   }
@@ -820,11 +821,6 @@ async function doDisable() {
 }
 
 // ==================== 初始化 ====================
-function formatTime(timeStr) {
-  if (!timeStr) return ''
-  return timeStr.replace('T', ' ')
-}
-
 onMounted(async () => {
   // 刷新私密空间状态
   try {

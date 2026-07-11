@@ -5,7 +5,6 @@ import org.example.netdisk.Mapper.FileMapper;
 import org.example.netdisk.ResponseDTO.R_File;
 import org.example.netdisk.ResponseDTO.Result;
 import org.example.netdisk.Service.Inter.FileService;
-import org.example.netdisk.Service.Support.FileConflictException;
 import org.example.netdisk.Utils.TokenProcess;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
@@ -37,15 +36,9 @@ public class FileController {
             @RequestParam(value = "packMethod", defaultValue = "none") String packMethod,
             @RequestParam(value = "compressMethod", defaultValue = "lz77") String compressMethod,
             @RequestParam(value = "displayName", required = false) String displayName) throws Exception {
-        try {
-            Long userId = Long.parseLong((String) TokenProcess.getAttributeFromToken(authHeader, "userId"));
-            R_File rFile = fileService.uploadFiles(userId, dirId, files, relativePaths, encrypt, privatePassword, packMethod, compressMethod, displayName);
-            return Result.success(rFile);
-        } catch (FileConflictException e) {
-            throw e; // 穿透给 GlobalExceptionHandler
-        } catch (RuntimeException e) {
-            return Result.error(e.getMessage());
-        }
+        Long userId = Long.parseLong((String) TokenProcess.getAttributeFromToken(authHeader, "userId"));
+        R_File rFile = fileService.uploadFiles(userId, dirId, files, relativePaths, encrypt, privatePassword, packMethod, compressMethod, displayName);
+        return Result.success(rFile);
     }
 
     @PostMapping("/user/file/download")
@@ -70,15 +63,9 @@ public class FileController {
     public Result<List<R_File>> listFiles(
             @RequestHeader("Authorization") String authHeader,
             @RequestParam("dirId") Long dirId) throws Exception {
-        try {
-            Long userId = Long.parseLong((String) TokenProcess.getAttributeFromToken(authHeader, "userId"));
-            List<R_File> list = fileService.listFiles(userId, dirId);
-            return Result.success(list);
-        } catch (FileConflictException e) {
-            throw e; // 穿透给 GlobalExceptionHandler
-        } catch (RuntimeException e) {
-            return Result.error(e.getMessage());
-        }
+        Long userId = Long.parseLong((String) TokenProcess.getAttributeFromToken(authHeader, "userId"));
+        List<R_File> list = fileService.listFiles(userId, dirId);
+        return Result.success(list);
     }
 
     @PostMapping("/user/file/rename")
@@ -128,18 +115,9 @@ public class FileController {
             @RequestParam("privatePassword") String privatePassword,
             @RequestParam("targetDirId") Long targetDirId,
             @RequestParam(value = "force", defaultValue = "false") boolean force) throws Exception {
-        try {
-            Long userId = Long.parseLong((String) TokenProcess.getAttributeFromToken(authHeader, "userId"));
-            boolean ok = fileService.encryptFile(userId, fileId, privatePassword, targetDirId, force);
-            if (ok) {
-                return Result.success("文件加密成功");
-            }
-            return Result.error("文件加密失败");
-        } catch (FileConflictException e) {
-            throw e; // 穿透给 GlobalExceptionHandler
-        } catch (RuntimeException e) {
-            return Result.error(e.getMessage());
-        }
+        Long userId = Long.parseLong((String) TokenProcess.getAttributeFromToken(authHeader, "userId"));
+        boolean ok = fileService.encryptFile(userId, fileId, privatePassword, targetDirId, force);
+        return ok ? Result.success("文件加密成功") : Result.error("文件加密失败");
     }
 
     @PostMapping("/user/file/decrypt")
@@ -149,17 +127,8 @@ public class FileController {
             @RequestParam("privatePassword") String privatePassword,
             @RequestParam("targetDirId") Long targetDirId,
             @RequestParam(value = "force", defaultValue = "false") boolean force) throws Exception {
-        try {
-            Long userId = Long.parseLong((String) TokenProcess.getAttributeFromToken(authHeader, "userId"));
-            boolean ok = fileService.decryptFile(userId, fileId, privatePassword, targetDirId, force);
-            if (ok) {
-                return Result.success("文件已解除加密");
-            }
-            return Result.error("解除加密失败");
-        } catch (FileConflictException e) {
-            throw e; // 穿透给 GlobalExceptionHandler
-        } catch (RuntimeException e) {
-            return Result.error(e.getMessage());
-        }
+        Long userId = Long.parseLong((String) TokenProcess.getAttributeFromToken(authHeader, "userId"));
+        boolean ok = fileService.decryptFile(userId, fileId, privatePassword, targetDirId, force);
+        return ok ? Result.success("文件已解除加密") : Result.error("解除加密失败");
     }
 }

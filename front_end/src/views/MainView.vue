@@ -315,9 +315,12 @@ import {
   HomeFilled, FolderAdd, Upload, Refresh, Folder, Document,
   Download, Edit, Delete, MoreFilled, Rank, Lock, Key, Search, User
 } from '@element-plus/icons-vue'
-import { directoryAPI, fileAPI, handleConflict } from '../api'
+import { directoryAPI, fileAPI, userAPI, withConflictRetry } from '../api'
 import { useUserStore } from '../stores/user'
 import { useTransferStore } from '../stores/transfer'
+import { formatTime } from '../utils/format'
+import { useFileBrowser } from '../composables/useFileBrowser'
+import { usePrivatePassword } from '../composables/usePrivatePassword'
 import UploadDialog from '../components/UploadDialog.vue'
 import DirPickerDialog from '../components/DirPickerDialog.vue'
 import Sidebar from '../components/Sidebar.vue'
@@ -325,33 +328,33 @@ import Sidebar from '../components/Sidebar.vue'
 const userStore = useUserStore()
 const transferStore = useTransferStore()
 
-// ==================== 目录导航（手动面包屑栈） ====================
-const currentDirId = ref(null)
-const breadcrumb = ref([])       // [{ dirId, dirName }], 首项为根目录 "我的文件"
-const directories = ref([])
-
-const currentBreadcrumbPath = computed(() => {
-  return breadcrumb.value.map(b => b.dirName).join(' / ') || '我的文件'
+const browser = useFileBrowser({
+  loadDirs: (parentId) => directoryAPI.list(parentId).then(r => r.data.data || []),
+  loadFs: (dirId) => fileAPI.list(dirId).then(r => r.data.data || []),
+  rootName: '我的文件'
 })
 
-/** 点击目录列表中的目录 → 进入子目录 */
-async function navigateToDir(dirId, dirName) {
-  currentDirId.value = dirId
-  breadcrumb.value.push({ dirId: String(dirId), dirName })
-  directories.value = []; files.value = []; loading.value = true
-  await loadDirectories(dirId)
-  await loadFiles(dirId)
-}
+const {
+  currentDirId, breadcrumb, directories, files, loading, currentPath,
+  navigateToDir, navigateToBreadcrumb, refreshCurrentDir,
+  allItems, onRowClick,
+  filterText, filterType, selectedItems, tableRef,
+  fileTypeOptions, filteredItems, onSelectionChange,
+  moveVisible, moveFileTarget, moveDirTree, moveTargetDirId, moveLoading, batchMoveItems,
+  uploadVisible,
+  createDirVisible, createDirName, createDirLoading,
+  renameDirVisible, renameDirTarget, renameDirNewName, renameDirLoading,
+  renameFileVisible, renameFileTarget, renameFileNewName, renameFileLoading
+} = browser
 
-/** 点击面包屑中的某一级 → 跳回该级 */
-async function navigateToBreadcrumb(index) {
-  const target = breadcrumb.value[index]
-  breadcrumb.value = breadcrumb.value.slice(0, index + 1)
-  currentDirId.value = Number(target.dirId)
-  directories.value = []; files.value = []; loading.value = true
-  await loadDirectories(Number(target.dirId))
-  await loadFiles(Number(target.dirId))
-}
+// 模板兼容
+const currentBreadcrumbPath = currentPath
+const _batchMoveItems = batchMoveItems
+
+// 私密密码弹窗
+const privatePwd = usePrivatePassword()
+const { visible: privatePwdVisible, password: privatePassword,
+  request: requestPrivatePassword, confirm: resolvePrivatePwd, cancel: cancelPrivatePwd } = privatePwd
 
 /** 回到根目录 → 自动进入用户的 "我的文件" */
 async function navigateToRoot() {
@@ -360,71 +363,20 @@ async function navigateToRoot() {
     const dirs = res.data.data || []
     const rootDir = dirs.find(d => d.dirName === '我的文件')
     if (rootDir) {
-      currentDirId.value = Number(rootDir.dirId)
-      breadcrumb.value = [{ dirId: rootDir.dirId, dirName: rootDir.dirName }]
-      await loadDirectories(Number(rootDir.dirId))
-      await loadFiles(Number(rootDir.dirId))
+      browser.setCurrentDirId(Number(rootDir.dirId))
+      browser.setBreadcrumb([{ dirId: rootDir.dirId, dirName: rootDir.dirName }])
+      await browser.refreshCurrentDir()
     } else {
-      currentDirId.value = null
-      breadcrumb.value = []
-      await loadDirectories(null)
+      browser.setCurrentDirId(null)
+      browser.setBreadcrumb([])
+      await browser.loadDirectories(null)
       files.value = []
     }
   } catch {
-    currentDirId.value = null
-    breadcrumb.value = []
+    browser.setCurrentDirId(null)
+    browser.setBreadcrumb([])
   }
   loading.value = false
-}
-
-// ==================== 数据加载 ====================
-const files = ref([])
-const loading = ref(false)
-
-// 统一列表：文件夹优先（order=0），文件在后（order=1）
-const allItems = computed(() => {
-  const dirs = directories.value.map(d => ({
-    id: d.dirId, name: d.dirName, type: '文件夹', isDir: true,
-    size: 0, time: d.createTime, order: 0, original: d
-  }))
-  const fls = files.value.map(f => ({
-    id: f.fileId, name: f.fileName, type: f.fileType || '未知', isDir: false,
-    size: f.fileSize, time: f.uploadTime, order: 1, original: f
-  }))
-  return [...dirs, ...fls]
-})
-
-function onRowClick(row) {
-  if (row.isDir) navigateToDir(row.id, row.name)
-}
-
-// ==================== 筛选 ====================
-const filterText = ref('')
-const filterType = ref('')
-const selectedItems = ref([])
-const tableRef = ref(null)
-
-// 从当前文件列表中提取已有的文件类型
-const fileTypeOptions = computed(() => {
-  const types = new Set()
-  files.value.forEach(f => { if (f.fileType) types.add(f.fileType) })
-  return [...types].sort()
-})
-
-const filteredItems = computed(() => {
-  let items = allItems.value
-  if (filterText.value) {
-    const q = filterText.value.toLowerCase()
-    items = items.filter(i => i.name.toLowerCase().includes(q))
-  }
-  if (filterType.value) {
-    items = items.filter(i => filterType.value === '文件夹' ? i.isDir : i.type === filterType.value)
-  }
-  return items
-})
-
-function onSelectionChange(selection) {
-  selectedItems.value = selection
 }
 
 // ==================== 批量操作 ====================
@@ -461,8 +413,6 @@ async function batchMove() {
   moveVisible.value = true
 }
 
-const _batchMoveItems = ref([])
-
 async function doMove() {
   if (_batchMoveItems.value.length > 0) {
     if (!moveTargetDirId.value) { ElMessage.warning('请选择目标文件夹'); return }
@@ -470,14 +420,12 @@ async function doMove() {
     let ok = 0, skipped = 0
     for (const item of _batchMoveItems.value) {
       if (item.isDir) continue
-      try {
-        await fileAPI.move(item.id, moveTargetDirId.value)
-        ok++
-      } catch (e) {
-        const retry = await handleConflict(e,
-          () => fileAPI.move(item.id, moveTargetDirId.value, true))
-        if (retry) { ok++ } else { skipped++ }
-      }
+      const targetId = moveTargetDirId.value
+      const retry = await withConflictRetry(
+        () => fileAPI.move(item.id, targetId),
+        () => fileAPI.move(item.id, targetId, true)
+      )
+      if (retry) { ok++ } else { skipped++ }
     }
     moveLoading.value = false
     ElMessage.success(`成功移动 ${ok} 个` + (skipped ? `，跳过 ${skipped} 个` : ''))
@@ -489,20 +437,15 @@ async function doMove() {
   // 单文件移动
   if (!moveTargetDirId.value) { ElMessage.warning('请选择目标文件夹'); return }
   moveLoading.value = true
-  try {
-    await fileAPI.move(moveFileTarget.value.fileId, moveTargetDirId.value)
-    ElMessage.success('已移动')
-    moveVisible.value = false
-    _batchMoveItems.value = []
-    await refreshCurrentDir()
-  } catch (e) {
-    await handleConflict(e,
-      () => fileAPI.move(moveFileTarget.value.fileId, moveTargetDirId.value, true))
-    moveVisible.value = false
-    _batchMoveItems.value = []
-    await refreshCurrentDir()
-  }
-  finally { moveLoading.value = false }
+  const fileTarget = moveFileTarget.value
+  await withConflictRetry(
+    () => fileAPI.move(fileTarget.fileId, moveTargetDirId.value),
+    () => fileAPI.move(fileTarget.fileId, moveTargetDirId.value, true)
+  )
+  moveVisible.value = false
+  _batchMoveItems.value = []
+  moveLoading.value = false
+  await refreshCurrentDir()
 }
 
 async function batchEncrypt() {
@@ -515,31 +458,9 @@ async function batchEncrypt() {
   openEncryptPicker(filesToEncrypt)
 }
 
-async function loadDirectories(parentId) {
-  try {
-    const res = await directoryAPI.list(parentId)
-    directories.value = res.data.data || []
-  } catch { directories.value = [] }
-}
-
-async function loadFiles(dirId) {
-  if (!dirId) { files.value = []; return }
-  loading.value = true
-  try {
-    const res = await fileAPI.list(dirId)
-    files.value = res.data.data || []
-  } catch { files.value = [] }
-  finally { loading.value = false }
-}
-
-async function refreshCurrentDir() {
-  await loadDirectories(currentDirId.value)
-  if (currentDirId.value) await loadFiles(currentDirId.value)
-}
-
 async function init() {
   try {
-    const res = await import('../api').then(m => m.userAPI.getUserInfo(userStore.userId))
+    const res = await userAPI.getUserInfo(userStore.userId)
     const info = res.data.data
     userStore.setStorageInfo(info.storage)
     userStore.setPrivateSpaceStatus(info.privateSpace ? info.privateSpace.enabled : false)
@@ -549,9 +470,6 @@ async function init() {
 }
 
 // ==================== 目录操作 ====================
-const createDirVisible = ref(false)
-const createDirName = ref('')
-const createDirLoading = ref(false)
 const createDirInput = ref(null)
 
 function openCreateDir() {
@@ -578,11 +496,6 @@ async function doCreateDir() {
   } catch { /* 拦截器处理 */ }
   finally { createDirLoading.value = false }
 }
-
-const renameDirVisible = ref(false)
-const renameDirTarget = ref(null)
-const renameDirNewName = ref('')
-const renameDirLoading = ref(false)
 
 function openRenameDir(dir) {
   renameDirTarget.value = dir
@@ -618,11 +531,6 @@ async function deleteDirectory(dir) {
 }
 
 // ==================== 文件操作 ====================
-const renameFileVisible = ref(false)
-const renameFileTarget = ref(null)
-const renameFileNewName = ref('')
-const renameFileLoading = ref(false)
-
 function openRenameFile(file) {
   renameFileTarget.value = file
   renameFileNewName.value = file.fileName
@@ -638,7 +546,8 @@ async function doRenameFile() {
     renameFileVisible.value = false
     await refreshCurrentDir()
   } catch (e) {
-    await handleConflict(e,
+    await withConflictRetry(
+      () => fileAPI.rename(renameFileTarget.value.fileId, renameFileNewName.value.trim()),
       () => fileAPI.rename(renameFileTarget.value.fileId, renameFileNewName.value.trim(), true))
     renameFileVisible.value = false
     await refreshCurrentDir()
@@ -646,11 +555,7 @@ async function doRenameFile() {
   finally { renameFileLoading.value = false }
 }
 
-const uploadVisible = ref(false)
-
-function openUpload() {
-  uploadVisible.value = true
-}
+function openUpload() { uploadVisible.value = true }
 
 async function onUploadConfirm({ files, packMethod, compressMethod, tarName, encrypt }) {
   if (files.length === 0) return
@@ -664,12 +569,10 @@ async function onUploadConfirm({ files, packMethod, compressMethod, tarName, enc
 
   try {
     if (packMethod === 'none') {
-      // 构建子目录树，返回每个相对路径 → dirId 的映射
       const dirMap = await buildUploadDirTree(files, currentDirId.value)
       const token = localStorage.getItem('token')
       const base = import.meta.env.PROD ? '' : '/api'
       for (const f of files) {
-        // 确定目标目录：取文件路径去掉文件名后的目录部分
         const rp = f.relativePath || f.name
         const dirPath = rp.includes('/') ? rp.substring(0, rp.lastIndexOf('/')) : ''
         const targetDirId = dirMap[dirPath] || dirMap[''] || currentDirId.value
@@ -723,12 +626,6 @@ async function downloadFile(file) {
 }
 
 // 移动
-const moveVisible = ref(false)
-const moveFileTarget = ref(null)
-const moveDirTree = ref([])
-const moveTargetDirId = ref(null)
-const moveLoading = ref(false)
-
 async function openMove(file) {
   moveFileTarget.value = file
   _batchMoveItems.value = []
@@ -859,7 +756,8 @@ async function onEncryptTargetSelected(targetDirId) {
       await fileAPI.encrypt(item.id || item.fileId, pwd, targetDirId)
       ok++
     } catch (e) {
-      const retry = await handleConflict(e,
+      const retry = await withConflictRetry(
+        () => fileAPI.encrypt(item.id || item.fileId, pwd, targetDirId),
         () => fileAPI.encrypt(item.id || item.fileId, pwd, targetDirId, true))
       if (retry) { ok++ } else { skipped++ }
     }
@@ -870,36 +768,7 @@ async function onEncryptTargetSelected(targetDirId) {
 }
 
 // 加密入口
-
-// ==================== 私密密码弹窗 ====================
-const privatePwdVisible = ref(false)
-const privatePassword = ref('')
-let privatePwdResolve = null
-
-function requestPrivatePassword() {
-  return new Promise((resolve) => {
-    privatePassword.value = ''
-    privatePwdResolve = resolve
-    privatePwdVisible.value = true
-  })
-}
-
-function resolvePrivatePwd() {
-  const pwd = privatePassword.value
-  privatePwdVisible.value = false
-  if (privatePwdResolve) {
-    privatePwdResolve(pwd)
-    privatePwdResolve = null
-  }
-}
-
-function cancelPrivatePwd() {
-  privatePwdVisible.value = false
-  if (privatePwdResolve) {
-    privatePwdResolve(null)
-    privatePwdResolve = null
-  }
-}
+function encryptFileAction(file) { openEncryptPicker([file]) }
 
 // ==================== 个人信息 ====================
 const profileVisible = ref(false)
@@ -934,7 +803,6 @@ async function doUpdateProfile() {
   }
   profileLoading.value = true
   try {
-    const { userAPI } = await import('../api')
     await userAPI.updateUserInfo(profileForm.newUsername, profileForm.newGender || null, profileAvatarFile.value)
     // 重新拉取用户信息以获取正确的头像 URL
     const infoRes = await userAPI.getUserInfo(userStore.userId)
@@ -976,7 +844,6 @@ async function doChangePassword() {
   if (!valid) return
   pwdLoading.value = true
   try {
-    const { userAPI } = await import('../api')
     await userAPI.changePassword(pwdForm.oldPassword, pwdForm.newPassword)
     ElMessage.success('密码已修改')
     passwordVisible.value = false
@@ -998,12 +865,6 @@ function getFileIconColor(file) {
     txt: '#9e9e9e', md: '#9e9e9e'
   }
   return colors[type] || '#909399'
-}
-
-function formatTime(timeStr) {
-  if (!timeStr) return ''
-  // LocalDateTime format: "2024-01-01T12:00:00"
-  return timeStr.replace('T', ' ')
 }
 
 const storageProgressColor = computed(() => {

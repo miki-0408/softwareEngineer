@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import { formatSize } from '../utils/format'
 
 let taskId = 0
 
@@ -112,12 +113,6 @@ export const useTransferStore = defineStore('transfer', () => {
 
   function clearDone() {
     tasks.value = tasks.value.filter(t => t.status !== 'done' && t.status !== 'error')
-  }
-
-  function formatSize(bytes) {
-    if (!bytes || bytes === 0) return '0 B'
-    const k = 1024, i = Math.floor(Math.log(bytes) / Math.log(k))
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + ['B', 'KB', 'MB', 'GB'][i]
   }
 
   return { tasks, running, addUpload, addDownloadWithPicker, removeTask, clearDone, formatSize }

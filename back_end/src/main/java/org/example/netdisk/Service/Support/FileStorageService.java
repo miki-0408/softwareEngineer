@@ -4,6 +4,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import org.example.netdisk.Utils.FileUtils;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -80,7 +82,7 @@ public class FileStorageService {
     }
 
     private String saveOneImage(MultipartFile file, Path targetDir) throws IOException {
-        String ext = getFileExtension(Objects.requireNonNullElse(file.getOriginalFilename(), ""));
+        String ext = FileUtils.extractExtension(Objects.requireNonNullElse(file.getOriginalFilename(), ""));
         String contentType = file.getContentType();
         if ((ext == null || ext.isEmpty()) && contentType != null) {
             ext = mimeToExt(contentType);
@@ -113,17 +115,6 @@ public class FileStorageService {
             return "unknown";
         }
         return String.valueOf(userId);
-    }
-
-    private static String getFileExtension(String filename) {
-        if (filename == null) {
-            return null;
-        }
-        int idx = filename.lastIndexOf('.');
-        if (idx < 0 || idx == filename.length() - 1) {
-            return null;
-        }
-        return filename.substring(idx + 1).toLowerCase();
     }
 
     private static String mimeToExt(String mime) {

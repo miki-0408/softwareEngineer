@@ -20,11 +20,9 @@
                   <span><el-icon><UserFilled /></el-icon> 重置用户密码</span>
                 </div>
               </template>
-              <el-form label-position="top" @submit.prevent="doResetPassword">
-                <el-form-item label="用户 ID">
-                  <el-input v-model="resetUserId" placeholder="请输入用户ID"
-                    :prefix-icon="User" />
-                </el-form-item>
+              <div>
+                <div style="font-size:14px;color:#606266;margin-bottom:6px">用户 ID</div>
+                <el-input v-model="resetUserId" placeholder="请输入用户ID" style="margin-bottom:12px" />
                 <el-alert
                   title="提示"
                   type="info"
@@ -36,7 +34,7 @@
                 <el-button type="warning" :loading="resetLoading" @click="doResetPassword">
                   重置密码
                 </el-button>
-              </el-form>
+              </div>
             </el-card>
           </el-col>
 
@@ -47,23 +45,20 @@
                   <span><el-icon><Edit /></el-icon> 修改用户信息</span>
                 </div>
               </template>
-              <el-form label-position="top" @submit.prevent="doUpdateUser">
-                <el-form-item label="用户 ID">
-                  <el-input v-model="updateUserId" placeholder="请输入用户ID" />
-                </el-form-item>
-                <el-form-item label="新用户名">
-                  <el-input v-model="updateUsername" placeholder="请输入新用户名" />
-                </el-form-item>
-                <el-form-item label="性别">
-                  <el-radio-group v-model="updateGender">
-                    <el-radio value="男">男</el-radio>
-                    <el-radio value="女">女</el-radio>
-                  </el-radio-group>
-                </el-form-item>
+              <div>
+                <div style="font-size:14px;color:#606266;margin-bottom:6px">用户 ID</div>
+                <el-input v-model="updateUserId" placeholder="请输入用户ID" style="margin-bottom:14px" />
+                <div style="font-size:14px;color:#606266;margin-bottom:6px">新用户名</div>
+                <el-input v-model="updateUsername" placeholder="请输入新用户名" style="margin-bottom:14px" />
+                <div style="font-size:14px;color:#606266;margin-bottom:6px">性别</div>
+                <el-radio-group v-model="updateGender" style="margin-bottom:14px">
+                  <el-radio value="男">男</el-radio>
+                  <el-radio value="女">女</el-radio>
+                </el-radio-group>
                 <el-button type="primary" :loading="updateLoading" @click="doUpdateUser">
                   更新信息
                 </el-button>
-              </el-form>
+              </div>
             </el-card>
           </el-col>
         </el-row>
@@ -79,7 +74,7 @@
             </div>
           </template>
 
-          <el-table :data="logs" v-loading="logsLoading" empty-text="暂无日志记录" max-height="400">
+          <el-table :data="paginatedLogs" v-loading="logsLoading" empty-text="暂无日志记录" max-height="400">
             <el-table-column label="日志ID" prop="logId" width="80" />
             <el-table-column label="操作者ID" prop="operatorId" width="100" />
             <el-table-column label="操作描述" prop="description" min-width="300" show-overflow-tooltip />
@@ -89,6 +84,15 @@
               </template>
             </el-table-column>
           </el-table>
+          <div style="margin-top:12px;display:flex;justify-content:flex-end">
+            <el-pagination
+              v-model:current-page="logPage"
+              :page-size="logPageSize"
+              :total="logs.length"
+              layout="total, prev, pager, next"
+              small
+            />
+          </div>
         </el-card>
       </div>
     </div>
@@ -96,10 +100,11 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Setting, UserFilled, Edit, Document, Refresh, User } from '@element-plus/icons-vue'
+import { Setting, UserFilled, Edit, Document, Refresh } from '@element-plus/icons-vue'
 import { adminAPI } from '../api'
+import { formatTime } from '../utils/format'
 import { useUserStore } from '../stores/user'
 import Sidebar from '../components/Sidebar.vue'
 
@@ -148,6 +153,13 @@ async function doUpdateUser() {
 // ==================== 日志 ====================
 const logs = ref([])
 const logsLoading = ref(false)
+const logPage = ref(1)
+const logPageSize = 20
+
+const paginatedLogs = computed(() => {
+  const start = (logPage.value - 1) * logPageSize
+  return logs.value.slice(start, start + logPageSize)
+})
 
 async function refreshLogs() {
   logsLoading.value = true
@@ -156,11 +168,6 @@ async function refreshLogs() {
     logs.value = res.data.data || []
   } catch { logs.value = [] }
   finally { logsLoading.value = false }
-}
-
-function formatTime(timeStr) {
-  if (!timeStr) return ''
-  return timeStr.replace('T', ' ')
 }
 
 onMounted(refreshLogs)

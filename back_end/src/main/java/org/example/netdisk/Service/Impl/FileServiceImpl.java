@@ -192,7 +192,7 @@ public class FileServiceImpl implements FileService {
             resolveConflict(userId, netdiskFile.getDirId(), newFileName, force);
         }
         netdiskFile.setFileName(newFileName);
-        netdiskFile.setFileType(extractFileType(newFileName));
+        netdiskFile.setFileType(FileUtils.extractExtension(newFileName));
         return fileMapper.updateFile(netdiskFile) > 0;
     }
 
@@ -218,44 +218,33 @@ public class FileServiceImpl implements FileService {
         return fileMapper.updateFileStatus(fileId, userId, fileStatusRecycle) > 0;
     }
 
-    // ==================== 移入私密空间（加密 + 移动到私密根目录） ====================
+    // ==================== 移入/移出私密空间 ====================
 
     @Override
     public boolean encryptFile(Long userId, Long fileId, String privatePassword, Long targetDirId, boolean force) {
-        NetdiskFile netdiskFile = fileMapper.selectFileById(fileId, userId);
-        if (netdiskFile == null || netdiskFile.getStatus() != fileStatusNormal) return false;
-        if (netdiskFile.getIsEncrypted() == encrypted) return true;
-        privateSpaceService.validatePrivatePassword(userId, privatePassword);
-        resolveConflict(userId, targetDirId, netdiskFile.getFileName(), force);
-
-        byte[] storedBytes = fileStorageService.readStoredFile(netdiskFile.getPath());
-        byte[] rawBytes = processDownload(storedBytes, null, netdiskFile.getCompressMethod());
-        byte[] newStoredBytes = processUpload(rawBytes, "none", "lz77", privatePassword);
-        netdiskFile.setCompressMethod((int) COMP_LZ77);
-        fileStorageService.deleteStoredFile(netdiskFile.getPath());
-        String newPath = fileStorageService.saveCompressedFile(newStoredBytes, userId, netdiskFile.getFileId());
-        adjustStorageOnSizeChange(userId, netdiskFile.getFileSize(), newStoredBytes.length);
-
-        netdiskFile.setPath(newPath);
-        netdiskFile.setFileSize((long) newStoredBytes.length);
-        netdiskFile.setDirId(targetDirId);
-        netdiskFile.setIsEncrypted(encrypted);
-        return fileMapper.updateFile(netdiskFile) > 0;
+        return recompressFile(userId, fileId, privatePassword, targetDirId, force, encrypted);
     }
-
-    // ==================== 移出私密空间 ====================
 
     @Override
     public boolean decryptFile(Long userId, Long fileId, String privatePassword, Long targetDirId, boolean force) {
+        return recompressFile(userId, fileId, privatePassword, targetDirId, force, notEncrypted);
+    }
+
+    /** 解密→重新压缩→加密（或反之）：encryptFile 和 decryptFile 的公共实现 */
+    private boolean recompressFile(Long userId, Long fileId, String password,
+            Long targetDirId, boolean force, int targetEncryptedFlag) {
         NetdiskFile netdiskFile = fileMapper.selectFileById(fileId, userId);
         if (netdiskFile == null || netdiskFile.getStatus() != fileStatusNormal) return false;
-        if (netdiskFile.getIsEncrypted() != encrypted) return true;
-        privateSpaceService.validatePrivatePassword(userId, privatePassword);
+        boolean currentlyEncrypted = netdiskFile.getIsEncrypted() == encrypted;
+        if (currentlyEncrypted == (targetEncryptedFlag == encrypted)) return true; // 已是目标状态
+        privateSpaceService.validatePrivatePassword(userId, password);
         resolveConflict(userId, targetDirId, netdiskFile.getFileName(), force);
 
         byte[] storedBytes = fileStorageService.readStoredFile(netdiskFile.getPath());
-        byte[] rawBytes = processDownload(storedBytes, privatePassword, netdiskFile.getCompressMethod());
-        byte[] newStoredBytes = processUpload(rawBytes, "none", "lz77", null);
+        byte[] rawBytes = processDownload(storedBytes,
+            currentlyEncrypted ? password : null, netdiskFile.getCompressMethod());
+        byte[] newStoredBytes = processUpload(rawBytes, "none", "lz77",
+            targetEncryptedFlag == encrypted ? password : null);
         netdiskFile.setCompressMethod((int) COMP_LZ77);
         fileStorageService.deleteStoredFile(netdiskFile.getPath());
         String newPath = fileStorageService.saveCompressedFile(newStoredBytes, userId, netdiskFile.getFileId());
@@ -264,7 +253,7 @@ public class FileServiceImpl implements FileService {
         netdiskFile.setPath(newPath);
         netdiskFile.setFileSize((long) newStoredBytes.length);
         netdiskFile.setDirId(targetDirId);
-        netdiskFile.setIsEncrypted(notEncrypted);
+        netdiskFile.setIsEncrypted(targetEncryptedFlag);
         return fileMapper.updateFile(netdiskFile) > 0;
     }
 
@@ -360,7 +349,7 @@ public class FileServiceImpl implements FileService {
         displayName = uniqueFileName(userId, targetDirId, displayName);
         NetdiskFile f = new NetdiskFile();
         f.setFileName(displayName);
-        f.setFileType(extractFileType(displayName));
+        f.setFileType(FileUtils.extractExtension(displayName));
         f.setFileSize(storedSize);
         f.setUserId(userId);
         f.setDirId(targetDirId);
@@ -388,10 +377,4 @@ public class FileServiceImpl implements FileService {
         return false;
     }
 
-    private String extractFileType(String fileName) {
-        if (fileName == null) return null;
-        int idx = fileName.lastIndexOf('.');
-        if (idx < 0 || idx == fileName.length() - 1) return null;
-        return fileName.substring(idx + 1).toLowerCase();
-    }
 }

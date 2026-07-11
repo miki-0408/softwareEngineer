@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { formatSize } from '../utils/format'
 
 export const useUserStore = defineStore('user', () => {
   const token = ref(localStorage.getItem('token') || '')
@@ -88,21 +89,13 @@ export const useUserStore = defineStore('user', () => {
     localStorage.clear()
   }
 
-  function formatSize(bytes) {
-    if (!bytes || bytes === 0) return '0 B'
-    const units = ['B', 'KB', 'MB', 'GB', 'TB']
-    const k = 1024
-    const i = Math.floor(Math.log(bytes) / Math.log(k))
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + units[i]
-  }
-
   return {
     token, userId, role, username, avatar, gender,
     totalSpace, usedSpace, remainSpace,
     privateSpaceEnabled, privateSpaceRootDirId, privatePassword,
-    isAdmin,
+    isAdmin, formatSize,  // formatSize re-exported from utils/format for template convenience
     setLoginData, setStorageInfo, setPrivateSpaceStatus,
     setPrivatePassword, clearPrivateAccess,
-    updateUserInfo, logout, formatSize
+    updateUserInfo, logout
   }
 })
