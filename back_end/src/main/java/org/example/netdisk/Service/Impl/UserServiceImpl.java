@@ -39,6 +39,13 @@ public class UserServiceImpl implements UserService {
         if (usermapper.selectUserByName(name) != null) {
             return false;
         }
+        // 先校验头像，避免用户已入库但头像保存失败
+        if (avatar != null && !avatar.isEmpty()) {
+            String contentType = avatar.getContentType();
+            if (contentType != null && !contentType.startsWith("image/")) {
+                throw new RuntimeException("仅支持图片类型文件");
+            }
+        }
         User user = new User();
         user.setName(name);
         user.setPassword(BcryptUtil.hash(password));

@@ -146,6 +146,10 @@ function handleAvatarRemove() {
 async function handleRegister() {
   const valid = await regFormRef.value.validate().catch(() => false)
   if (!valid) return
+  if (avatarFile.value && avatarFile.value.size > 10 * 1024 * 1024) {
+    ElMessage.error('头像文件大小不能超过 10MB')
+    return
+  }
   regLoading.value = true
   try {
     await authAPI.register(regForm.username, regForm.password, regForm.gender, avatarFile.value)

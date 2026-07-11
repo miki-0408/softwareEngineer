@@ -928,6 +928,10 @@ function handleProfileAvatarRemove() {
 async function doUpdateProfile() {
   const valid = await profileFormRef.value.validate().catch(() => false)
   if (!valid) return
+  if (profileAvatarFile.value && profileAvatarFile.value.size > 10 * 1024 * 1024) {
+    ElMessage.error('头像文件大小不能超过 10MB')
+    return
+  }
   profileLoading.value = true
   try {
     const { userAPI } = await import('../api')
