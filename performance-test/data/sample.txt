@@ -1,0 +1,3 @@
+Hello, this is a sample file for JMeter upload performance testing.
+Content line 2
+Content line 3
