@@ -11,7 +11,6 @@
       <el-menu
         :default-active="activeMenu"
         router
-        @select="handleSelect"
       >
         <!-- 普通用户菜单 -->
         <template v-if="!userStore.isAdmin">
@@ -78,7 +77,7 @@ import { useUserStore } from '../stores/user'
 import { useTransferStore } from '../stores/transfer'
 
 const transferStore = useTransferStore()
-const props = defineProps({
+defineProps({
   activeMenu: { type: String, default: 'files' }
 })
 
@@ -91,10 +90,6 @@ const avatarUrl = computed(() => {
   if (av.startsWith('http')) return av
   return import.meta.env.PROD ? av : '/api' + av
 })
-
-function handleSelect(index) {
-  // router 已通过 :route 处理
-}
 
 function handleLogout() {
   userStore.logout()

@@ -10,6 +10,7 @@ import org.example.netdisk.Mapper.StorageSpaceMapper;
 import org.example.netdisk.ResponseDTO.R_Directory;
 import org.example.netdisk.ResponseDTO.R_File;
 import org.example.netdisk.Service.Inter.FileService;
+import org.example.netdisk.Service.Support.FileConflictException;
 import org.example.netdisk.Service.Support.FileStorageService;
 import org.example.netdisk.Service.Support.TransformService;
 import org.example.netdisk.Utils.*;
@@ -43,25 +44,6 @@ public class FileServiceImpl implements FileService {
     private TransformService transformService;
 
     // ==================== 文件上传 ====================
-
-    @Override
-    public R_File uploadFile(Long userId, Long dirId, MultipartFile file, boolean encrypt,
-                             String privatePassword, String packMethod, String compressMethod) {
-        if (file == null || file.isEmpty()) throw new RuntimeException("上传文件不能为空");
-        Long targetDirId = resolveEncryptTarget(userId, dirId, encrypt, privatePassword);
-        int isEncryptedFlag = encrypt ? encrypted : notEncrypted;
-        try {
-            byte[] processed = processUpload(file.getBytes(), packMethod, compressMethod,
-                encrypt ? privatePassword : null);
-            StorageSpace sp = requireStorage(userId, processed.length);
-            String name = Objects.requireNonNullElse(file.getOriginalFilename(), "未命名文件");
-            if ("tar".equals(packMethod) && !name.endsWith(".tar")) name += ".tar";
-            return transformService.transformFileToRFile(
-                insertAndSaveFile(userId, targetDirId, name, processed.length, processed, compressMethod, isEncryptedFlag, sp));
-        } catch (IOException e) { throw new RuntimeException("文件上传失败", e); }
-    }
-
-    // ==================== 多文件/文件夹上传 ====================
 
     @Override
     public R_File uploadFiles(Long userId, Long dirId, List<MultipartFile> files, List<String> relativePaths,
@@ -203,28 +185,26 @@ public class FileServiceImpl implements FileService {
     // ==================== 重命名 / 移动 / 删除 ====================
 
     @Override
-    public boolean renameFile(Long userId, Long fileId, String newFileName) {
+    public boolean renameFile(Long userId, Long fileId, String newFileName, boolean force) {
         NetdiskFile netdiskFile = fileMapper.selectFileById(fileId, userId);
-        if (netdiskFile == null || netdiskFile.getStatus() != fileStatusNormal) {
-            return false;
+        if (netdiskFile == null || netdiskFile.getStatus() != fileStatusNormal) return false;
+        if (!newFileName.equals(netdiskFile.getFileName())) {
+            resolveConflict(userId, netdiskFile.getDirId(), newFileName, force);
         }
-        newFileName = uniqueFileName(userId, netdiskFile.getDirId(), newFileName);
         netdiskFile.setFileName(newFileName);
         netdiskFile.setFileType(extractFileType(newFileName));
         return fileMapper.updateFile(netdiskFile) > 0;
     }
 
     @Override
-    public boolean moveFile(Long userId, Long fileId, Long targetDirId) {
+    public boolean moveFile(Long userId, Long fileId, Long targetDirId, boolean force) {
         NetdiskFile netdiskFile = fileMapper.selectFileById(fileId, userId);
-        if (netdiskFile == null || netdiskFile.getStatus() != fileStatusNormal) {
-            return false;
-        }
+        if (netdiskFile == null || netdiskFile.getStatus() != fileStatusNormal) return false;
         Directory targetDir = directoryMapper.selectDirectoryById(targetDirId, userId);
-        if (targetDir == null) {
-            return false;
+        if (targetDir == null) return false;
+        if (!targetDirId.equals(netdiskFile.getDirId())) {
+            resolveConflict(userId, targetDirId, netdiskFile.getFileName(), force);
         }
-        netdiskFile.setFileName(uniqueFileName(userId, targetDirId, netdiskFile.getFileName()));
         netdiskFile.setDirId(targetDirId);
         return fileMapper.updateFile(netdiskFile) > 0;
     }
@@ -241,11 +221,12 @@ public class FileServiceImpl implements FileService {
     // ==================== 移入私密空间（加密 + 移动到私密根目录） ====================
 
     @Override
-    public boolean encryptFile(Long userId, Long fileId, String privatePassword, Long targetDirId) {
+    public boolean encryptFile(Long userId, Long fileId, String privatePassword, Long targetDirId, boolean force) {
         NetdiskFile netdiskFile = fileMapper.selectFileById(fileId, userId);
         if (netdiskFile == null || netdiskFile.getStatus() != fileStatusNormal) return false;
         if (netdiskFile.getIsEncrypted() == encrypted) return true;
         privateSpaceService.validatePrivatePassword(userId, privatePassword);
+        resolveConflict(userId, targetDirId, netdiskFile.getFileName(), force);
 
         byte[] storedBytes = fileStorageService.readStoredFile(netdiskFile.getPath());
         byte[] rawBytes = processDownload(storedBytes, null, netdiskFile.getCompressMethod());
@@ -257,7 +238,6 @@ public class FileServiceImpl implements FileService {
 
         netdiskFile.setPath(newPath);
         netdiskFile.setFileSize((long) newStoredBytes.length);
-        netdiskFile.setFileName(uniqueFileName(userId, targetDirId, netdiskFile.getFileName()));
         netdiskFile.setDirId(targetDirId);
         netdiskFile.setIsEncrypted(encrypted);
         return fileMapper.updateFile(netdiskFile) > 0;
@@ -266,11 +246,12 @@ public class FileServiceImpl implements FileService {
     // ==================== 移出私密空间 ====================
 
     @Override
-    public boolean decryptFile(Long userId, Long fileId, String privatePassword, Long targetDirId) {
+    public boolean decryptFile(Long userId, Long fileId, String privatePassword, Long targetDirId, boolean force) {
         NetdiskFile netdiskFile = fileMapper.selectFileById(fileId, userId);
         if (netdiskFile == null || netdiskFile.getStatus() != fileStatusNormal) return false;
         if (netdiskFile.getIsEncrypted() != encrypted) return true;
         privateSpaceService.validatePrivatePassword(userId, privatePassword);
+        resolveConflict(userId, targetDirId, netdiskFile.getFileName(), force);
 
         byte[] storedBytes = fileStorageService.readStoredFile(netdiskFile.getPath());
         byte[] rawBytes = processDownload(storedBytes, privatePassword, netdiskFile.getCompressMethod());
@@ -282,7 +263,6 @@ public class FileServiceImpl implements FileService {
 
         netdiskFile.setPath(newPath);
         netdiskFile.setFileSize((long) newStoredBytes.length);
-        netdiskFile.setFileName(uniqueFileName(userId, targetDirId, netdiskFile.getFileName()));
         netdiskFile.setDirId(targetDirId);
         netdiskFile.setIsEncrypted(notEncrypted);
         return fileMapper.updateFile(netdiskFile) > 0;
@@ -314,8 +294,26 @@ public class FileServiceImpl implements FileService {
         storageSpaceMapper.updateStorageSpace(storageSpace);
     }
 
-    /** 确保文件名在目录中唯一，冲突时加 (1)(2) 后缀 */
-    private String uniqueFileName(Long userId, Long dirId, String fileName) {
+    /** 检查同名文件，不存在返回 true；存在且 force 则删除旧文件返回 true；存在且 !force 则抛异常 */
+    private boolean resolveConflict(Long userId, Long dirId, String fileName, boolean force) {
+        if (fileMapper.countFilesByName(userId, dirId, fileName) > 0) {
+            if (!force) throw new FileConflictException(fileName);
+            // 删除同名旧文件（不限 isEncrypted，覆盖普通和私密空间）
+            List<NetdiskFile> files = fileMapper.selectFilesByNameAndDir(userId, dirId, fileName, fileStatusNormal);
+            for (NetdiskFile f : files) {
+                if (fileName.equals(f.getFileName())) {
+                    fileStorageService.deleteStoredFile(f.getPath());
+                    releaseStorage(userId, f.getFileSize());
+                    fileMapper.deleteFile(f.getFileId(), userId);
+                    break;
+                }
+            }
+        }
+        return true;
+    }
+
+    /** 保留旧逻辑的兜底：冲突时自动加后缀（用于上传等场景） */
+    public String uniqueFileName(Long userId, Long dirId, String fileName) {
         String base = fileName;
         String ext = "";
         int dot = fileName.lastIndexOf('.');
@@ -332,7 +330,6 @@ public class FileServiceImpl implements FileService {
         return candidate;
     }
 
-    /** 检查 dirId 是否是 ancestorDirId 的后代（含自身） */
     /** 加密上传时解析目标目录 */
     private Long resolveEncryptTarget(Long userId, Long dirId, boolean encrypt, String privatePassword) {
         if (!encrypt) {

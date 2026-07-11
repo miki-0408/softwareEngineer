@@ -19,9 +19,7 @@ export const useUserStore = defineStore('user', () => {
   const privateSpaceRootDirId = ref(sessionStorage.getItem('ps_root') || '')
   const privatePassword = ref(sessionStorage.getItem('ps_pwd') || '')
 
-  const isLoggedIn = computed(() => !!token.value)
   const isAdmin = computed(() => role.value === 'admin')
-  const hasPrivateAccess = computed(() => !!privatePassword.value)
 
   function setLoginData(data) {
     const { token: t, user } = data
@@ -102,7 +100,7 @@ export const useUserStore = defineStore('user', () => {
     token, userId, role, username, avatar, gender,
     totalSpace, usedSpace, remainSpace,
     privateSpaceEnabled, privateSpaceRootDirId, privatePassword,
-    isLoggedIn, isAdmin, hasPrivateAccess,
+    isAdmin,
     setLoginData, setStorageInfo, setPrivateSpaceStatus,
     setPrivatePassword, clearPrivateAccess,
     updateUserInfo, logout, formatSize

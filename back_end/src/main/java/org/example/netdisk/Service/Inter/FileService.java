@@ -7,8 +7,6 @@ import java.util.List;
 
 public interface FileService {
 
-    R_File uploadFile(Long userId, Long dirId, MultipartFile file, boolean encrypt, String privatePassword, String packMethod, String compressMethod);
-
     R_File uploadFiles(Long userId, Long dirId, List<MultipartFile> files, List<String> relativePaths,
                        boolean encrypt, String privatePassword, String packMethod, String compressMethod,
                        String displayName);
@@ -17,13 +15,13 @@ public interface FileService {
 
     List<R_File> listFiles(Long userId, Long dirId);
 
-    boolean renameFile(Long userId, Long fileId, String newFileName);
+    boolean renameFile(Long userId, Long fileId, String newFileName, boolean force);
 
-    boolean moveFile(Long userId, Long fileId, Long targetDirId);
+    boolean moveFile(Long userId, Long fileId, Long targetDirId, boolean force);
 
     boolean moveToRecycleBin(Long userId, Long fileId);
 
-    boolean encryptFile(Long userId, Long fileId, String privatePassword, Long targetDirId);
+    boolean encryptFile(Long userId, Long fileId, String privatePassword, Long targetDirId, boolean force);
 
-    boolean decryptFile(Long userId, Long fileId, String privatePassword, Long targetDirId);
+    boolean decryptFile(Long userId, Long fileId, String privatePassword, Long targetDirId, boolean force);
 }

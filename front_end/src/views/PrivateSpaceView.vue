@@ -264,20 +264,18 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Lock, Key, FolderAdd, Upload, Refresh, Folder, Document,
-  Download, Edit, Delete, MoreFilled, Rank, Unlock, UploadFilled, Search, Close
+  Download, Edit, Delete, MoreFilled, Rank, Unlock, Search
 } from '@element-plus/icons-vue'
-import { privateSpaceAPI, directoryAPI, fileAPI, userAPI } from '../api'
+import { privateSpaceAPI, directoryAPI, fileAPI, userAPI, handleConflict } from '../api'
 import { useUserStore } from '../stores/user'
 import { useTransferStore } from '../stores/transfer'
 import UploadDialog from '../components/UploadDialog.vue'
 import DirPickerDialog from '../components/DirPickerDialog.vue'
 import Sidebar from '../components/Sidebar.vue'
 
-const router = useRouter()
 const userStore = useUserStore()
 const transferStore = useTransferStore()
 
@@ -532,7 +530,12 @@ async function doRenameFile() {
     ElMessage.success('已重命名')
     renameFileVisible.value = false
     await refreshCurrentDir()
-  } catch { /* ignore */ }
+  } catch (e) {
+    await handleConflict(e,
+      () => fileAPI.rename(renameFileTarget.value.fileId, renameFileNewName.value.trim(), true))
+    renameFileVisible.value = false
+    await refreshCurrentDir()
+  }
   finally { renameFileLoading.value = false }
 }
 
@@ -631,25 +634,28 @@ async function buildPrivateDirTree(parentId) {
 function handleMoveTargetSelect(node) { moveTargetDirId.value = node.dirId }
 
 async function doMove() {
-  // 批量移动
   if (_batchMoveItems.value.length > 0) {
     if (!moveTargetDirId.value) { ElMessage.warning('请选择目标文件夹'); return }
     moveLoading.value = true
-    let ok = 0
+    let ok = 0, skipped = 0
     for (const item of _batchMoveItems.value) {
+      if (item.isDir) continue
       try {
-        if (!item.isDir) await fileAPI.move(item.id, moveTargetDirId.value)
+        await fileAPI.move(item.id, moveTargetDirId.value)
         ok++
-      } catch { /* skip */ }
+      } catch (e) {
+        const retry = await handleConflict(e,
+          () => fileAPI.move(item.id, moveTargetDirId.value, true))
+        if (retry) { ok++ } else { skipped++ }
+      }
     }
     moveLoading.value = false
-    ElMessage.success(`成功移动 ${ok} 项`)
+    ElMessage.success(`成功移动 ${ok} 个` + (skipped ? `，跳过 ${skipped} 个` : ''))
     moveVisible.value = false
     _batchMoveItems.value = []
     await refreshCurrentDir()
     return
   }
-  // 单文件移动
   if (!moveTargetDirId.value) { ElMessage.warning('请选择目标文件夹'); return }
   moveLoading.value = true
   try {
@@ -657,7 +663,12 @@ async function doMove() {
     ElMessage.success('已移动')
     moveVisible.value = false
     await refreshCurrentDir()
-  } catch { /* ignore */ }
+  } catch (e) {
+    await handleConflict(e,
+      () => fileAPI.move(moveFileTarget.value.fileId, moveTargetDirId.value, true))
+    moveVisible.value = false
+    await refreshCurrentDir()
+  }
   finally { moveLoading.value = false }
 }
 
@@ -714,14 +725,18 @@ async function onDecryptTargetSelected(targetDirId) {
   const targets = Array.isArray(_decryptTarget) ? _decryptTarget
     : (_decryptTarget ? [_decryptTarget] : [])
   ElMessage.info(`正在移出 ${targets.length} 个文件...`)
-  let ok = 0
+  let ok = 0, skipped = 0
   for (const item of targets) {
     try {
       await fileAPI.decrypt(item.id || item.fileId, userStore.privatePassword, targetDirId)
       ok++
-    } catch { /* skip */ }
+    } catch (e) {
+      const retry = await handleConflict(e,
+        () => fileAPI.decrypt(item.id || item.fileId, userStore.privatePassword, targetDirId, true))
+      if (retry) { ok++ } else { skipped++ }
+    }
   }
-  ElMessage.success(`成功移出 ${ok} 个文件`)
+  ElMessage.success(`成功移出 ${ok} 个` + (skipped ? `，跳过 ${skipped} 个` : ''))
   _decryptTarget = null
   await refreshCurrentDir()
 }

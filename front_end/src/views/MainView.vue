@@ -310,20 +310,18 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted, nextTick } from 'vue'
-import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   HomeFilled, FolderAdd, Upload, Refresh, Folder, Document,
-  Download, Edit, Delete, MoreFilled, Rank, Lock, Unlock, Key, UploadFilled, Search, User, Close
+  Download, Edit, Delete, MoreFilled, Rank, Lock, Key, Search, User
 } from '@element-plus/icons-vue'
-import { directoryAPI, fileAPI } from '../api'
+import { directoryAPI, fileAPI, handleConflict } from '../api'
 import { useUserStore } from '../stores/user'
 import { useTransferStore } from '../stores/transfer'
 import UploadDialog from '../components/UploadDialog.vue'
 import DirPickerDialog from '../components/DirPickerDialog.vue'
 import Sidebar from '../components/Sidebar.vue'
 
-const router = useRouter()
 const userStore = useUserStore()
 const transferStore = useTransferStore()
 
@@ -466,19 +464,23 @@ async function batchMove() {
 const _batchMoveItems = ref([])
 
 async function doMove() {
-  // 兼容单文件移动和批量移动
   if (_batchMoveItems.value.length > 0) {
     if (!moveTargetDirId.value) { ElMessage.warning('请选择目标文件夹'); return }
     moveLoading.value = true
-    let ok = 0
+    let ok = 0, skipped = 0
     for (const item of _batchMoveItems.value) {
+      if (item.isDir) continue
       try {
-        if (!item.isDir) await fileAPI.move(item.id, moveTargetDirId.value)
+        await fileAPI.move(item.id, moveTargetDirId.value)
         ok++
-      } catch { /* skip */ }
+      } catch (e) {
+        const retry = await handleConflict(e,
+          () => fileAPI.move(item.id, moveTargetDirId.value, true))
+        if (retry) { ok++ } else { skipped++ }
+      }
     }
     moveLoading.value = false
-    ElMessage.success(`成功移动 ${ok} 项`)
+    ElMessage.success(`成功移动 ${ok} 个` + (skipped ? `，跳过 ${skipped} 个` : ''))
     moveVisible.value = false
     _batchMoveItems.value = []
     await refreshCurrentDir()
@@ -493,7 +495,13 @@ async function doMove() {
     moveVisible.value = false
     _batchMoveItems.value = []
     await refreshCurrentDir()
-  } catch { /* ignore */ }
+  } catch (e) {
+    await handleConflict(e,
+      () => fileAPI.move(moveFileTarget.value.fileId, moveTargetDirId.value, true))
+    moveVisible.value = false
+    _batchMoveItems.value = []
+    await refreshCurrentDir()
+  }
   finally { moveLoading.value = false }
 }
 
@@ -629,7 +637,12 @@ async function doRenameFile() {
     ElMessage.success('已重命名')
     renameFileVisible.value = false
     await refreshCurrentDir()
-  } catch { /* ignore */ }
+  } catch (e) {
+    await handleConflict(e,
+      () => fileAPI.rename(renameFileTarget.value.fileId, renameFileNewName.value.trim(), true))
+    renameFileVisible.value = false
+    await refreshCurrentDir()
+  }
   finally { renameFileLoading.value = false }
 }
 
@@ -840,36 +853,23 @@ async function onEncryptTargetSelected(targetDirId) {
   const targets = Array.isArray(_encryptTarget) ? _encryptTarget
     : (_encryptTarget ? [_encryptTarget] : [])
   ElMessage.info(`正在移入 ${targets.length} 个文件...`)
-  let ok = 0
+  let ok = 0, skipped = 0
   for (const item of targets) {
     try {
       await fileAPI.encrypt(item.id || item.fileId, pwd, targetDirId)
       ok++
-    } catch { /* skip */ }
+    } catch (e) {
+      const retry = await handleConflict(e,
+        () => fileAPI.encrypt(item.id || item.fileId, pwd, targetDirId, true))
+      if (retry) { ok++ } else { skipped++ }
+    }
   }
-  ElMessage.success(`成功移入 ${ok} 个文件`)
+  ElMessage.success(`成功移入 ${ok} 个` + (skipped ? `，跳过 ${skipped} 个` : ''))
   _encryptTarget = null
   await refreshCurrentDir()
 }
 
-// 加密/解密入口
-async function encryptFileAction(file) {
-  openEncryptPicker([file])
-}
-
-async function decryptFileAction(file) {
-  let pwd = userStore.privatePassword
-  if (!pwd) {
-    pwd = await requestPrivatePassword()
-    if (!pwd) return
-    userStore.setPrivatePassword(pwd)
-  }
-  try {
-    await fileAPI.decrypt(file.fileId, pwd, userStore.privateSpaceRootDirId)
-    ElMessage.success('已移出私密空间')
-    await refreshCurrentDir()
-  } catch { /* ignore */ }
-}
+// 加密入口
 
 // ==================== 私密密码弹窗 ====================
 const privatePwdVisible = ref(false)

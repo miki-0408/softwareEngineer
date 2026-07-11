@@ -15,6 +15,4 @@ public interface PrivateSpaceMapper {
     @Update("UPDATE private_space SET password=#{password}, isEncrypted=#{isEncrypted} WHERE userId=#{userId}")
     int updatePrivateSpace(PrivateSpace privateSpace);
 
-    @Delete("DELETE FROM private_space WHERE userId = #{userId}")
-    int deletePrivateSpace(@Param("userId") Long userId);
 }

@@ -133,12 +133,6 @@ public class PrivateSpaceServiceImpl implements PrivateSpaceService {
         }
     }
 
-    public String getPrivateSpacePassword(Long userId) {
-        PrivateSpace ps = privateSpaceMapper.selectByUserId(userId);
-        if (ps == null) return null;
-        return ps.getPassword();
-    }
-
     /** 查找用户的私密空间根目录 */
     public Directory findPrivateSpaceRoot(Long userId) {
         java.util.List<Directory> roots = directoryMapper.selectRootDirectories(userId);

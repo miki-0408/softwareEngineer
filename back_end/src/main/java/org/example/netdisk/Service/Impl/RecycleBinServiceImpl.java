@@ -66,8 +66,16 @@ public class RecycleBinServiceImpl implements RecycleBinService {
                 fallbackDirId = userRoot != null ? userRoot.getDirId() : null;
             }
             netdiskFile.setDirId(fallbackDirId);
-            fileMapper.updateFile(netdiskFile);
         }
+        // 同名兜底
+        Long targetDirId = netdiskFile.getDirId();
+        if (targetDirId != null) {
+            String uniqueName = fileService.uniqueFileName(userId, targetDirId, netdiskFile.getFileName());
+            if (!uniqueName.equals(netdiskFile.getFileName())) {
+                netdiskFile.setFileName(uniqueName);
+            }
+        }
+        fileMapper.updateFile(netdiskFile);
         return fileMapper.updateFileStatus(fileId, userId, fileStatusNormal) > 0;
     }
 

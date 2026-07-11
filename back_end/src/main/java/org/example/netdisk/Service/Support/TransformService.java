@@ -45,7 +45,6 @@ public class TransformService {
         rFile.setFileSize(file.getFileSize());
         rFile.setUploadTime(file.getUploadTime());
         rFile.setDirId(file.getDirId() == null ? null : String.valueOf(file.getDirId()));
-        rFile.setOriginalDirId(file.getOriginalDirId() == null ? null : String.valueOf(file.getOriginalDirId()));
         rFile.setStatus(file.getStatus());
         rFile.setIsEncrypted(file.getIsEncrypted());
         rFile.setCompressMethod(file.getCompressMethod());

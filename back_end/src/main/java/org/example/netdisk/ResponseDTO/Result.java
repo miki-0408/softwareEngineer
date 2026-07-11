@@ -24,5 +24,10 @@ public class Result<T> {
     public static Result error(String message) {
         return new Result(1, message, null);
     }
+
+    /** 文件名冲突（code=2），data 存冲突文件名，前端弹出替换确认 */
+    public static Result<String> conflict(String conflictName, String message) {
+        return new Result<>(2, message, conflictName);
+    }
 }
 

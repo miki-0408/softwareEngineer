@@ -38,6 +38,10 @@ public interface FileMapper {
     @Select("SELECT * FROM file WHERE userId = #{userId} AND status = #{status}")
     List<NetdiskFile> selectFilesByStatus(@Param("userId") Long userId, @Param("status") Integer status);
 
+    /** 按目录和文件名查找文件（不限 isEncrypted，用于冲突检查等） */
+    @Select("SELECT * FROM file WHERE userId = #{userId} AND dirId = #{dirId} AND fileName = #{fileName} AND status = #{status}")
+    List<NetdiskFile> selectFilesByNameAndDir(@Param("userId") Long userId, @Param("dirId") Long dirId, @Param("fileName") String fileName, @Param("status") Integer status);
+
     /** 统计某目录下普通文件数 */
     @Select("SELECT COUNT(*) FROM file WHERE userId = #{userId} AND dirId = #{dirId} AND status = 0 AND isEncrypted = 0")
     int countFilesInDirectory(@Param("userId") Long userId, @Param("dirId") Long dirId);

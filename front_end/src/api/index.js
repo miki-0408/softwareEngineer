@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 
 const http = axios.create({
   baseURL: import.meta.env.PROD ? '' : '/api',
@@ -24,6 +24,13 @@ http.interceptors.response.use(
     }
     const data = response.data
     if (data && data.code !== undefined && data.code !== 0) {
+      if (data.code === 2) {
+        ElMessage.warning(data.message || '文件名冲突')
+        const err = new Error(data.message || '文件名冲突')
+        err.conflict = true
+        err.conflictName = data.data
+        return Promise.reject(err)
+      }
       ElMessage.error(data.message || '操作失败')
       return Promise.reject(new Error(data.message || '操作失败'))
     }
@@ -134,53 +141,19 @@ export const fileAPI = {
     return http.post('/user/file/list', params)
   },
 
-  upload(dirId, file, encrypt, privatePassword, packMethod, compressMethod) {
-    const fd = new FormData()
-    fd.append('dirId', dirId)
-    fd.append('files', file)
-    fd.append('relativePaths', file.name)
-    if (encrypt) {
-      fd.append('encrypt', 'true')
-      fd.append('privatePassword', privatePassword)
-    }
-    fd.append('packMethod', packMethod || 'none')
-    fd.append('compressMethod', compressMethod || 'lz77')
-    return http.post('/user/file/upload', fd)
-  },
-
-  multiUpload(dirId, uploadFiles, encrypt, privatePassword, packMethod, compressMethod, displayName) {
-    const fd = new FormData()
-    fd.append('dirId', dirId)
-    uploadFiles.forEach(f => fd.append('files', f.raw))
-    uploadFiles.forEach(f => fd.append('relativePaths', f.relativePath))
-    if (encrypt) {
-      fd.append('encrypt', 'true')
-      fd.append('privatePassword', privatePassword)
-    }
-    fd.append('packMethod', packMethod || 'tar')
-    fd.append('compressMethod', compressMethod || 'lz77')
-    if (displayName) fd.append('displayName', displayName)
-    return http.post('/user/file/upload', fd)
-  },
-
-  download(fileId, privatePassword) {
-    const params = new URLSearchParams()
-    params.append('fileId', fileId)
-    if (privatePassword) params.append('privatePassword', privatePassword)
-    return http.post('/user/file/download', params, { responseType: 'blob' })
-  },
-
-  rename(fileId, newFileName) {
+  rename(fileId, newFileName, force) {
     const params = new URLSearchParams()
     params.append('fileId', fileId)
     params.append('newFileName', newFileName)
+    if (force) params.append('force', 'true')
     return http.post('/user/file/rename', params)
   },
 
-  move(fileId, targetDirId) {
+  move(fileId, targetDirId, force) {
     const params = new URLSearchParams()
     params.append('fileId', fileId)
     params.append('targetDirId', targetDirId)
+    if (force) params.append('force', 'true')
     return http.post('/user/file/move', params)
   },
 
@@ -190,19 +163,21 @@ export const fileAPI = {
     return http.post('/user/file/delete', params)
   },
 
-  encrypt(fileId, privatePassword, targetDirId) {
+  encrypt(fileId, privatePassword, targetDirId, force) {
     const params = new URLSearchParams()
     params.append('fileId', fileId)
     params.append('privatePassword', privatePassword)
     params.append('targetDirId', targetDirId)
+    if (force) params.append('force', 'true')
     return http.post('/user/file/encrypt', params)
   },
 
-  decrypt(fileId, privatePassword, targetDirId) {
+  decrypt(fileId, privatePassword, targetDirId, force) {
     const params = new URLSearchParams()
     params.append('fileId', fileId)
     params.append('privatePassword', privatePassword)
     params.append('targetDirId', targetDirId)
+    if (force) params.append('force', 'true')
     return http.post('/user/file/decrypt', params)
   }
 }
@@ -290,6 +265,23 @@ export const adminAPI = {
     if (newAvatar) fd.append('newAvatar', newAvatar)
     return http.post('/systemAdmin/updateUserInfo', fd)
   }
+}
+
+// ===================== 冲突重试 =====================
+
+/** 遇到文件冲突时弹窗询问，确认则以 force=true 重试 */
+export async function handleConflict(error, retryWithForce) {
+  if (error && error.conflict) {
+    try {
+      await ElMessageBox.confirm(
+        `文件「${error.conflictName}」已存在，是否替换？`,
+        '文件名冲突',
+        { confirmButtonText: '替换', cancelButtonText: '跳过', type: 'warning' }
+      )
+    } catch { return false /* 用户取消 */ }
+    return await retryWithForce()
+  }
+  throw error
 }
 
 export default http

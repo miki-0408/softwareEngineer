@@ -1,8 +1,6 @@
 package org.example.netdisk.Service.Support;
 
 public class Enum {
-    public static final String male = "男";
-    public static final String female = "女";
     public static final String unknown = "未知";
 
     public static final String normalUser = "user";
