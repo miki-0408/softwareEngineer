@@ -230,7 +230,7 @@ public class FileServiceImpl implements FileService {
         return recompressFile(userId, fileId, privatePassword, targetDirId, force, notEncrypted);
     }
 
-    /** 解密→重新压缩→加密（或反之）：encryptFile 和 decryptFile 的公共实现 */
+    /** 加密/解密存储字节（不解压不重压，只加/去加密层）：encryptFile 和 decryptFile 的公共实现 */
     private boolean recompressFile(Long userId, Long fileId, String password,
             Long targetDirId, boolean force, int targetEncryptedFlag) {
         NetdiskFile netdiskFile = fileMapper.selectFileById(fileId, userId);
@@ -241,11 +241,10 @@ public class FileServiceImpl implements FileService {
         resolveConflict(userId, targetDirId, netdiskFile.getFileName(), force);
 
         byte[] storedBytes = fileStorageService.readStoredFile(netdiskFile.getPath());
-        byte[] rawBytes = processDownload(storedBytes,
-            currentlyEncrypted ? password : null, netdiskFile.getCompressMethod());
-        byte[] newStoredBytes = processUpload(rawBytes, "none", "lz77",
-            targetEncryptedFlag == encrypted ? password : null);
-        netdiskFile.setCompressMethod((int) COMP_LZ77);
+        // 只加/去加密层，不触碰压缩层——避免无意义的解压再压缩往返
+        byte[] newStoredBytes = (targetEncryptedFlag == encrypted)
+            ? EncryptionUtil.encrypt(storedBytes, password)
+            : EncryptionUtil.decrypt(storedBytes, password);
         fileStorageService.deleteStoredFile(netdiskFile.getPath());
         String newPath = fileStorageService.saveCompressedFile(newStoredBytes, userId, netdiskFile.getFileId());
         adjustStorageOnSizeChange(userId, netdiskFile.getFileSize(), newStoredBytes.length);
