@@ -4,6 +4,8 @@
       <!-- 左侧：文件选择区 -->
       <div style="flex:3;display:flex;flex-direction:column;min-width:0;overflow:hidden">
         <div class="flex-center gap-8" style="margin-bottom:10px;min-width:0">
+          <input ref="fileInput" type="file" multiple style="display:none" @change="onFilesChange" />
+          <input ref="folderInput" type="file" webkitdirectory style="display:none" @change="onFilesChange" />
           <el-tooltip :content="targetPath" placement="top" :disabled="!targetPath || targetPath.length < 25">
             <el-tag type="info" size="small" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:default">
               {{ targetPath }}
