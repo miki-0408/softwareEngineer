@@ -1,0 +1,28 @@
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.project
+.classpath
+.settings/
+
+# Maven
+back_end/target/
+
+# Node
+front_end/node_modules/
+front_end/dist/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docs/Misc
+*.md
+!README.md
+performance-test/
