@@ -51,7 +51,7 @@
                 <div style="font-size:14px;color:#606266;margin-bottom:6px">新用户名</div>
                 <el-input v-model="updateUsername" placeholder="请输入新用户名" style="margin-bottom:14px" />
                 <div style="font-size:14px;color:#606266;margin-bottom:6px">性别</div>
-                <el-radio-group v-model="updateGender" style="margin-bottom:14px">
+                <el-radio-group v-model="updateGender" style="margin-bottom:14px;display:block">
                   <el-radio value="男">男</el-radio>
                   <el-radio value="女">女</el-radio>
                 </el-radio-group>
