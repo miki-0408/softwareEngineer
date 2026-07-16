@@ -3,40 +3,25 @@ package org.example.netdisk.Utils;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
-/**
- * 基于 BCrypt 的密码工具类。
- * 用法：
- * - 生成哈希：String hash = BcryptUtil.hash(raw);
- * - 校验：boolean ok = BcryptUtil.matches(raw, hash);
- */
 public final class BcryptUtil {
-    // 默认强度 10，可按需调整到 12~14。强度越高计算越慢越安全。
-    private static final int DEFAULT_STRENGTH = 12;
+    private static final int DEFAULT_STRENGTH = 12; // BCrypt哈希强度，值越大越安全但计算越慢
 
-    // PasswordEncoder 线程安全，可全局复用。
-    private static final PasswordEncoder ENCODER = new BCryptPasswordEncoder(DEFAULT_STRENGTH);
+    private static final PasswordEncoder ENCODER = new BCryptPasswordEncoder(DEFAULT_STRENGTH); // 全局复用编码器，线程安全
 
-    private BcryptUtil() {}
+    private BcryptUtil() {} // 工具类禁止实例化
 
-    /**
-     * 生成 BCrypt 哈希（包含随机盐与成本因子）。
-     */
-    public static String hash(String rawPassword) {
-        if (rawPassword == null) {
+    public static String hash(String rawPassword) { // 对明文密码生成BCrypt哈希值
+        if (rawPassword == null) { // 拒绝空密码
             throw new IllegalArgumentException("rawPassword cannot be null");
         }
-        return ENCODER.encode(rawPassword);
+        return ENCODER.encode(rawPassword); // 生成包含随机盐的哈希值
     }
 
-    /**
-     * 校验明文与哈希是否匹配。
-     */
-    public static boolean matches(String rawPassword, String encodedPassword) {
-        if (rawPassword == null || encodedPassword == null) {
+    public static boolean matches(String rawPassword, String encodedPassword) { // 校验明文密码与哈希值是否匹配
+        if (rawPassword == null || encodedPassword == null) { // 任一个为空则直接返回不匹配
             return false;
         }
-        return ENCODER.matches(rawPassword, encodedPassword);
+        return ENCODER.matches(rawPassword, encodedPassword); // 比对明文与哈希
     }
 
 }
-

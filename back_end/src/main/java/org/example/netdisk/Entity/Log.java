@@ -4,10 +4,10 @@ import lombok.Data;
 
 import java.time.LocalDateTime;
 
-@Data
+@Data // Lombok自动生成getter/setter等
 public class Log {
-    private Long logId;
-    private Long operatorId;
-    private LocalDateTime time;
-    private String description;
+    private Long logId; // 日志唯一ID（自增主键）
+    private Long operatorId; // 操作者用户ID
+    private LocalDateTime time; // 操作时间
+    private String description; // 操作描述（如请求URI）
 }
